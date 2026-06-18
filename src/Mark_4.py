@@ -247,9 +247,16 @@ class TopoGAT(nn.Module):
         edge_features = torch.cat([pos_nodes[row], pos_nodes[col]], dim=1)
         
         # FIX: Added -1 to squeeze to prevent 0-D tensor edge cases
-        edge_scores = self.edge_scorer(edge_features).squeeze(-1)
+        bio_scores = self.edge_scorer(edge_features).squeeze(-1)
         
-        mask = edge_scores > CONFIG["prune_thresh"]
+        # --- NOVELTY 3: Spatial Decay Penalty (Mimicking Chemical Signals) ---
+        # The biological attention score exponentially decays the further away two cells are.
+        # Equation: Score = Bio_Score * exp(-Distance / Tau)
+        edge_distances = torch.norm(coords[row] - coords[col], dim=1)
+        spatial_decay = torch.exp(-edge_distances / CONFIG["decay_tau"])
+        
+        decayed_scores = bio_scores * spatial_decay
+        mask = decayed_scores > CONFIG["prune_thresh"]
         pruned_edge_index = edge_index[:, mask]
 
         if pruned_edge_index.shape[1] == 0:
