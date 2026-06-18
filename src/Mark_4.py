@@ -362,7 +362,6 @@ def process_slide(slide_path, label, extractor, gnn, criterion_bce, criterion_ms
     # We now return the raw Loss Tensor so the gradient accumulator handles it.
     acc = 100 if (prediction.item() >= 0.5) == label else 0
     return loss, acc, prediction.item(), weights, cluster_embeddings, master_coords
-
 # =====================================================================
 # 6. CLOUD MANAGER 
 # =====================================================================
