@@ -51,8 +51,15 @@ import concurrent.futures
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"--- INITIATING MARK 4 (TopoGAT) ON {device.type.upper()} ---")
 
-drive.mount('/content/drive')
-CHECKPOINT_DIR = "/content/drive/MyDrive/TopoGAT_Checkpoints"
+# --- THE FIX: Dynamic Checkpoint Routing ---
+# Automatically route saves to Google Drive if available, otherwise use local disk
+if IN_COLAB:
+    drive.mount('/content/drive')
+    CHECKPOINT_DIR = "/content/drive/MyDrive/TopoGAT_Checkpoints"
+else:
+    print("[SYSTEM] Non-Colab environment detected. Defaulting to local storage.")
+    CHECKPOINT_DIR = "./TopoGAT_Checkpoints"
+    
 os.makedirs(CHECKPOINT_DIR, exist_ok=True)
 
 CHECKPOINT_PATH = os.path.join(CHECKPOINT_DIR, "mid_flight_checkpoint_mk4.pth")
