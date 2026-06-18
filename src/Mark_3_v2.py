@@ -79,7 +79,8 @@ def fourier_amplitude_mix(x, ref, beta=0.08):
     return out.clamp(0, 1)
 
 photometric_augment = T.Compose([
-    T.ColorJitter(brightness=0.2, contrast=0.2) # Removed redundant Hue/Saturation for Grayscale (Claude fix)
+    T.ColorJitter(brightness=0.2, contrast=0.2), # Kept Brightness/Contrast
+    T.GaussianBlur(kernel_size=3, sigma=(0.1, 2.0)) # Restored from Mark 3
 ])
 
 # =====================================================================
