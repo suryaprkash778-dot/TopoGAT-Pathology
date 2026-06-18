@@ -275,9 +275,9 @@ class TopoGAT(nn.Module):
         a_u = self.attention_U(x_res)
         weights = F.softmax(self.attention_weights(a_v * a_u), dim=0)
 
-        prediction = torch.sigmoid(self.classifier(torch.sum(x_res * weights, dim=0, keepdim=True)))
+        logits = self.classifier(torch.sum(x_res * weights, dim=0, keepdim=True))
         # Now we pass the learned control dials out to the loss calculator
-        return prediction, cluster_embeddings, weights, x_recon, self.loss_log_vars
+        return logits, cluster_embeddings, weights, x_recon, self.loss_log_vars
 
 # =====================================================================
 # 5. EXPLAINABILITY & PROCESSING ENGINE
@@ -343,10 +343,12 @@ def process_slide(slide_path, label, extractor, gnn, criterion_bce, criterion_ms
     adj_mask = (S_dist <= CONFIG["connect_radius"]) & (S_dist > 0) & (F_sim >= CONFIG["morpho_thresh"])
     edge_index = adj_mask.nonzero(as_tuple=False).t().contiguous()
 
-    # Catch the new log_vars parameter!
-    prediction, cluster_embeddings, weights, x_recon, log_vars = gnn(master_nodes, edge_index, master_coords)
+    # Catch the raw logits and the new log_vars parameter!
+    logits, cluster_embeddings, weights, x_recon, log_vars = gnn(master_nodes, edge_index, master_coords)
 
-    loss_diag = criterion_bce(prediction, torch.tensor([[label]]).to(device))
+    # Pass RAW logits to BCEWithLogitsLoss for absolute numerical stability
+    loss_diag = criterion_bce(logits, torch.tensor([[label]]).to(device))
+    
     loss_recon = criterion_mse(x_recon, master_nodes)
     loss_org = criterion_recal(cluster_embeddings)
 
@@ -359,9 +361,11 @@ def process_slide(slide_path, label, extractor, gnn, criterion_bce, criterion_ms
     loss = loss_0 + loss_1 + loss_2
 
     # CLAUDE FIX: Removed the double-backward bug. 
-    # We now return the raw Loss Tensor so the gradient accumulator handles it.
-    acc = 100 if (prediction.item() >= 0.5) == label else 0
-    return loss, acc, prediction.item(), weights, cluster_embeddings, master_coords
+    # Convert raw logits to a 0-1 probability just for the accuracy tracker and printing
+    pred_prob = torch.sigmoid(logits).item()
+    
+    acc = 100 if (pred_prob >= 0.5) == label else 0
+    return loss, acc, pred_prob, weights, cluster_embeddings, master_coords
 # =====================================================================
 # 6. CLOUD MANAGER 
 # =====================================================================
@@ -398,7 +402,7 @@ def lr_lambda(step):
 warmup_scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
 scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=EPOCHS)
 
-criterion_bce = nn.BCELoss()
+criterion_bce = nn.BCEWithLogitsLoss()
 criterion_mse = nn.MSELoss()
 criterion_recal = ReCalLoss()
 
