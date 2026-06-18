@@ -211,6 +211,10 @@ class TopoGAT(nn.Module):
 
         self.classifier = nn.Linear(hidden_dim, 1)
 
+        # --- NEW: Self-Regulating Hydra Loss Controllers ---
+        # The AI learns these 3 values to dynamically balance its own loss functions
+        self.loss_log_vars = nn.Parameter(torch.zeros(3))
+
     def forward(self, nodes, edge_index, coords):
         norm_coords = (coords - coords.mean(dim=0)) / (coords.std(dim=0) + 1e-5)
         pos_nodes = nodes + self.pos_encoder(norm_coords)
