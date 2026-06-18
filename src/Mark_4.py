@@ -245,7 +245,8 @@ class TopoGAT(nn.Module):
         weights = F.softmax(self.attention_weights(a_v * a_u), dim=0)
 
         prediction = torch.sigmoid(self.classifier(torch.sum(x_res * weights, dim=0, keepdim=True)))
-        return prediction, cluster_embeddings, weights, x_recon
+        # Now we pass the learned control dials out to the loss calculator
+        return prediction, cluster_embeddings, weights, x_recon, self.loss_log_vars
 
 # =====================================================================
 # 5. EXPLAINABILITY & PROCESSING ENGINE
