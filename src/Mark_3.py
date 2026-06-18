@@ -409,14 +409,37 @@ for epoch in range(start_epoch, EPOCHS + 1):
         if not manage_cloud_chunk(chunk, download=True): continue
 
         slides = [f for f in os.listdir('.') if f.endswith('.tif')]
+        
+        # --- NEW: Gradient Accumulation Setup ---
+        accumulation_steps = 4 
+        slide_count = 0
+        optimizer.zero_grad() # Moved OUTSIDE the slide loop
+        
         for slide in slides:
-            optimizer.zero_grad()  # Unrestricted GPU speed, immediate optimization
             label = 1.0 if "tumor" in slide else 0.0
+            
+            # 1. Process the slide
             loss, _, pred, _, _, _ = process_slide(slide, label, extractor, gnn, criterion_bce, criterion_mse,
                                                    criterion_recal, is_training=True)
-            optimizer.step()
+            
+            # 2. Scale loss and accumulate gradients
+            scaled_loss = loss / accumulation_steps 
+            scaled_loss.backward() 
+            
+            slide_count += 1
+            
+            # 3. Only step the optimizer every 4 slides
+            if slide_count % accumulation_steps == 0:
+                optimizer.step()
+                optimizer.zero_grad()
+            
             print(f"  Train -> {slide} | Pred: {pred:.4f} | Loss: {loss:.4f}")
             torch.cuda.empty_cache()
+            
+        # 4. Catch any leftover gradients at the end of the chunk
+        if slide_count % accumulation_steps != 0:
+            optimizer.step()
+            optimizer.zero_grad()
 
         torch.save({
             'epoch': epoch,
