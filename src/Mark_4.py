@@ -342,9 +342,6 @@ def process_slide(slide_path, label, extractor, gnn, criterion_bce, criterion_ms
     # 3. Custom Adjacency: Connect ONLY if they are physically close AND biologically related!
     adj_mask = (S_dist <= CONFIG["connect_radius"]) & (S_dist > 0) & (F_sim >= CONFIG["morpho_thresh"])
     edge_index = adj_mask.nonzero(as_tuple=False).t().contiguous()
-    
-    # Connects edges based on the radius set in your Master CONFIG
-    edge_index = ((dist <= CONFIG["connect_radius"]) & (dist > 0)).nonzero(as_tuple=False).t().contiguous()
 
     # Catch the new log_vars parameter!
     prediction, cluster_embeddings, weights, x_recon, log_vars = gnn(master_nodes, edge_index, master_coords)
