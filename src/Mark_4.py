@@ -137,9 +137,39 @@ def get_tissue_coordinates(slide_path, level=4):
         _, mask = cv2.threshold(thumb_gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
         y_coords, x_coords = np.nonzero(mask)
 
+        def get_tissue_coordinates(slide_path, level=4, patch_size=256):
+    try:
+        slide = openslide.OpenSlide(slide_path)
+        
+        # Safely fallback if a slide has fewer levels than expected
+        if level >= slide.level_count:
+            level = slide.level_count - 1
+            
+        thumb = slide.read_region((0, 0), level, slide.level_dimensions[level])
+        thumb_np = np.array(thumb)
+        
+        # --- THE FIX: OpenSlide Alpha-to-White Blending ---
+        rgb = thumb_np[:, :, :3]
+        alpha = thumb_np[:, :, 3]
+        rgb[alpha == 0] = [255, 255, 255]
+        
+        thumb_gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
+        _, mask = cv2.threshold(thumb_gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+        y_coords, x_coords = np.nonzero(mask)
+
         # Use round() before int() to prevent float-truncation drift on gigapixel coordinates
         scale_factor = int(round(slide.level_downsamples[level]))
-        coords = [[x_coords[i] * scale_factor, y_coords[i] * scale_factor] for i in range(len(x_coords))]
+        max_w, max_h = slide.dimensions
+        
+        # --- THE FIX: Out-of-Bounds Boundary Guard ---
+        # Strip out any patches that bleed off the glass to prevent black-pixel padding
+        coords = []
+        for i in range(len(x_coords)):
+            x = int(round(x_coords[i] * scale_factor))
+            y = int(round(y_coords[i] * scale_factor))
+            
+            if x + patch_size <= max_w and y + patch_size <= max_h:
+                coords.append([x, y])
 
         if len(coords) > CONFIG["max_patches"]:
             coords_np = np.array(coords)
