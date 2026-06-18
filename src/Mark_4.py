@@ -360,7 +360,13 @@ def process_slide(slide_path, label, extractor, gnn, criterion_bce, criterion_ms
 
     loss = loss_0 + loss_1 + loss_2
 
-    # CLAUDE FIX: Removed the double-backward bug. 
+    # --- THE FIX: Strict Memory Safety ---
+    # Explicitly sever all tensors from the PyTorch graph when we aren't training
+    if not is_training:
+        loss = loss.detach()
+        weights = weights.detach()
+        cluster_embeddings = cluster_embeddings.detach()
+
     # Convert raw logits to a 0-1 probability just for the accuracy tracker and printing
     pred_prob = torch.sigmoid(logits).item()
     
