@@ -372,7 +372,9 @@ def process_slide(slide_path, label, extractor, gnn, criterion_bce, criterion_ms
             if is_training:
                 patches = photometric_augment(patches)
                 if patches.size(0) > 1:
-                    ref_idx = torch.randperm(patches.size(0))
+                    # --- THE FIX: GPU-Native Indexing ---
+                    # Generate the permutation directly on the GPU to prevent PCIe bus stalls
+                    ref_idx = torch.randperm(patches.size(0), device=patches.device)
                     patches = fourier_amplitude_mix(patches, patches[ref_idx])
 
             all_nodes.append(extractor(patches))
