@@ -182,8 +182,8 @@ class Mark3GNN(nn.Module):
         super().__init__()
         self.pos_encoder = nn.Linear(2, hidden_dim)
 
-        self.conv1 = GATv2Conv(hidden_dim, hidden_dim, heads=3, concat=False)
-        self.conv2 = GATv2Conv(hidden_dim, hidden_dim, heads=3, concat=False)
+        self.conv1 = GATv2Conv(hidden_dim, hidden_dim // 3, heads=3, concat=True)
+        self.conv2 = GATv2Conv(hidden_dim, hidden_dim // 3, heads=3, concat=True)
 
         self.decoder = nn.Linear(hidden_dim, hidden_dim)  # MSE Structure Head
         self.cluster_head = nn.Linear(hidden_dim, num_clusters)  # ReCal Organization Head
