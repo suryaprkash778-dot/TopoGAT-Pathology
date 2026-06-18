@@ -428,7 +428,14 @@ def manage_cloud_chunk(chunk_id, download=True):
             futures = [executor.submit(download_s3_file, *args) for args in files_to_download]
             concurrent.futures.wait(futures)
             
-        return len([f for f in os.listdir('.') if f.endswith('.tif')]) > 0
+        # Verify exact expected files are on disk to prevent silent partial-chunk failures
+        expected_files = [f[2] for f in files_to_download]
+        valid_files = [f for f in expected_files if os.path.exists(f)]
+        
+        if len(valid_files) < len(expected_files):
+            print(f"  [WARNING] I/O Mismatch! Expected {len(expected_files)} slides, but only secured {len(valid_files)}.")
+            
+        return len(valid_files) > 0
     else:
         # Native Python file cleanup instead of OS sub-shells
         for i in range(start_idx, end_idx + 1):
