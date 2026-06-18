@@ -13,7 +13,7 @@ except ModuleNotFoundError:
     print("[SYSTEM] Installing OpenSlide C-Libraries (this takes ~15 seconds)...")
     os.system("apt-get update -qq && apt-get install -y openslide-tools > /dev/null 2>&1")
     print("[SYSTEM] Installing Python wrappers and Graph components...")
-    os.system("pip install openslide-python torch-geometric torchvision -q")
+    os.system("pip install openslide-python torch-geometric torchvision boto3 -q")
     print("[SYSTEM] Environment built successfully! Proceeding to TopoGAT Execution...\n")
     import site
     from importlib import reload
@@ -35,7 +35,10 @@ import seaborn as sns
 from sklearn.metrics import confusion_matrix
 import random
 from google.colab import drive
-
+import boto3
+from botocore import UNSIGNED
+from botocore.config import Config
+import concurrent.futures
 # =====================================================================
 # 1. PERSISTENT STORAGE & CONFIGURATION
 # =====================================================================
@@ -389,22 +392,52 @@ def process_slide(slide_path, label, extractor, gnn, criterion_bce, criterion_ms
 # =====================================================================
 # 6. CLOUD MANAGER 
 # =====================================================================
+# =====================================================================
+# 6. CLOUD MANAGER (PARALLEL I/O)
+# =====================================================================
+def download_s3_file(bucket_name, s3_key, local_path):
+    """Worker function to download a single file safely."""
+    if os.path.exists(local_path): 
+        return True
+    
+    # Configure anonymous access to the public bucket
+    s3 = boto3.client('s3', config=Config(signature_version=UNSIGNED))
+    try:
+        s3.download_file(bucket_name, s3_key, local_path)
+        return True
+    except Exception as e:
+        print(f"  [I/O ERROR] Failed to download {s3_key}: {e}")
+        return False
+
 def manage_cloud_chunk(chunk_id, download=True):
     start_idx = ((chunk_id - 1) * 10) + 1
     end_idx = start_idx + 9
+    
+    bucket = "camelyon-dataset"
+    prefix = "CAMELYON16/images/"
 
     if download:
-        print(f"\n[CLOUD] Preparing Chunk {chunk_id} (Patient Slides {start_idx:03d} to {end_idx:03d})...")
-        os.system("pip install awscli -q")
+        print(f"\n[CLOUD] Parallel-Fetching Chunk {chunk_id} (Slides {start_idx:03d} to {end_idx:03d})...")
+        files_to_download = []
         for i in range(start_idx, end_idx + 1):
-            tumor_file, normal_file = f"tumor_{i:03d}.tif", f"normal_{i:03d}.tif"
-            os.system(f"python -m awscli s3 cp s3://camelyon-dataset/CAMELYON16/images/{tumor_file} ./ --no-sign-request > /dev/null 2>&1")
-            os.system(f"python -m awscli s3 cp s3://camelyon-dataset/CAMELYON16/images/{normal_file} ./ --no-sign-request > /dev/null 2>&1")
+            files_to_download.append((bucket, f"{prefix}tumor_{i:03d}.tif", f"tumor_{i:03d}.tif"))
+            files_to_download.append((bucket, f"{prefix}normal_{i:03d}.tif", f"normal_{i:03d}.tif"))
+        
+        # Spin up 8 concurrent threads to saturate network bandwidth
+        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+            futures = [executor.submit(download_s3_file, *args) for args in files_to_download]
+            concurrent.futures.wait(futures)
+            
         return len([f for f in os.listdir('.') if f.endswith('.tif')]) > 0
     else:
+        # Native Python file cleanup instead of OS sub-shells
         for i in range(start_idx, end_idx + 1):
-            os.system(f"rm -f tumor_{i:03d}.tif normal_{i:03d}.tif")
-        return True # CLAUDE FIX: Ensure an implicit None is not returned
+            try:
+                if os.path.exists(f"tumor_{i:03d}.tif"): os.remove(f"tumor_{i:03d}.tif")
+                if os.path.exists(f"normal_{i:03d}.tif"): os.remove(f"normal_{i:03d}.tif")
+            except Exception:
+                pass
+        return True
 
 # =====================================================================
 # 7. THE MASTER LOOP
