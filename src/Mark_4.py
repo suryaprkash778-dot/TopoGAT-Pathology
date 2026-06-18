@@ -304,13 +304,20 @@ def process_slide(slide_path, label, extractor, gnn, criterion_bce, criterion_ms
     # FIX: Increased dist to 600 to let Edge Pruner do its job
     edge_index = ((dist <= 600.0) & (dist > 0)).nonzero(as_tuple=False).t().contiguous()
 
-    prediction, cluster_embeddings, weights, x_recon = gnn(master_nodes, edge_index, master_coords)
+    # Catch the new log_vars parameter!
+    prediction, cluster_embeddings, weights, x_recon, log_vars = gnn(master_nodes, edge_index, master_coords)
 
     loss_diag = criterion_bce(prediction, torch.tensor([[label]]).to(device))
     loss_recon = criterion_mse(x_recon, master_nodes)
     loss_org = criterion_recal(cluster_embeddings)
 
-    loss = loss_diag + (0.1 * loss_recon) + (0.05 * loss_org)
+    # --- THE FIX: AI-Controlled Adaptive Loss Balancing ---
+    # The AI uses its learned uncertainty dials to scale the importance of each task dynamically!
+    loss_0 = loss_diag * torch.exp(-log_vars[0]) + log_vars[0]
+    loss_1 = loss_recon * torch.exp(-log_vars[1]) + log_vars[1]
+    loss_2 = loss_org * torch.exp(-log_vars[2]) + log_vars[2]
+
+    loss = loss_0 + loss_1 + loss_2
 
     # CLAUDE FIX: Removed the double-backward bug. 
     # We now return the raw Loss Tensor so the gradient accumulator handles it.
