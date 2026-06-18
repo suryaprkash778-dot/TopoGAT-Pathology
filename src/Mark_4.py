@@ -49,10 +49,30 @@ os.makedirs(CHECKPOINT_DIR, exist_ok=True)
 CHECKPOINT_PATH = os.path.join(CHECKPOINT_DIR, "mid_flight_checkpoint_mk4.pth")
 BEST_MODEL_PATH = os.path.join(CHECKPOINT_DIR, "best_mark4.pth")
 
-EPOCHS = 10
-TRAIN_CHUNKS = [1, 2, 3, 4, 5, 6, 7, 8]  
-VAL_CHUNKS = [9]  
-TEST_CHUNKS = [10]  
+# --- THE MASTER HYPERPARAMETER DIAL ---
+CONFIG = {
+    "epochs": 10,
+    "train_chunks": [1, 2, 3, 4, 5, 6, 7, 8],
+    "val_chunks": [9],
+    "test_chunks": [10],
+    
+    "max_patches": 800,        # How many tissue chunks to extract per slide
+    "grid_bins": 29,           # Math: int(sqrt(max_patches)) + 1
+    "hash_mult": 31,           # Must be slightly larger than grid_bins
+    "batch_size": 64,          # DataLoader batch size
+    
+    "gnn_heads": 4,            # Number of multi-core attention heads
+    "connect_radius": 600.0,   # Physical distance (pixels) to draw initial edges
+    "prune_thresh": 0.5,       # Confidence needed (0 to 1) for Edge Pruner to keep a connection
+    
+    "lr": 0.0002,              # Learning Rate
+    "grad_accum": 4            # How many slides to average before stepping
+}
+
+EPOCHS = CONFIG["epochs"]
+TRAIN_CHUNKS = CONFIG["train_chunks"]
+VAL_CHUNKS = CONFIG["val_chunks"]
+TEST_CHUNKS = CONFIG["test_chunks"] 
 
 # =====================================================================
 # 2. DOMAIN GENERALIZATION (FDA & PHOTOMETRICS)
@@ -97,19 +117,17 @@ def get_tissue_coordinates(slide_path, downsample_level=4):
         scale_factor = int(slide.level_downsamples[downsample_level])
         coords = [[x_coords[i] * scale_factor, y_coords[i] * scale_factor] for i in range(len(x_coords))]
 
-        if len(coords) > 800:
+        if len(coords) > CONFIG["max_patches"]:
             coords_np = np.array(coords)
-            # CLAUDE FIX: Bin into a grid and sample one point per cell for better spatial awareness
-            x_bins = np.linspace(coords_np[:,0].min(), coords_np[:,0].max(), 29)
-            y_bins = np.linspace(coords_np[:,1].min(), coords_np[:,1].max(), 29)
+            x_bins = np.linspace(coords_np[:,0].min(), coords_np[:,0].max(), CONFIG["grid_bins"])
+            y_bins = np.linspace(coords_np[:,1].min(), coords_np[:,1].max(), CONFIG["grid_bins"])
             x_idx = np.digitize(coords_np[:,0], x_bins)
             y_idx = np.digitize(coords_np[:,1], y_bins)
             
-            # CLAUDE FIX 3: Multiplier of 31 prevents spatial hash collisions for edge cases
-            grid_keys = x_idx * 31 + y_idx
+            grid_keys = x_idx * CONFIG["hash_mult"] + y_idx
             
             _, unique_idx = np.unique(grid_keys, return_index=True)
-            coords = coords_np[unique_idx[:800]].tolist()
+            coords = coords_np[unique_idx[:CONFIG["max_patches"]]].tolist()
         return coords
     except Exception as e:
         return []
@@ -199,8 +217,10 @@ class TopoGAT(nn.Module):
         )
 
         # FIX: Divisible by 4 math alignment
-        self.conv1 = GATv2Conv(hidden_dim, hidden_dim // 4, heads=4, concat=True)
-        self.conv2 = GATv2Conv(hidden_dim, hidden_dim // 4, heads=4, concat=True)
+        # Dynamically scales the math alignment based on your CONFIG heads
+        h = CONFIG["gnn_heads"]
+        self.conv1 = GATv2Conv(hidden_dim, hidden_dim // h, heads=h, concat=True)
+        self.conv2 = GATv2Conv(hidden_dim, hidden_dim // h, heads=h, concat=True)
 
         self.decoder = nn.Linear(hidden_dim, hidden_dim) 
         self.cluster_head = nn.Linear(hidden_dim, num_clusters) 
@@ -225,7 +245,7 @@ class TopoGAT(nn.Module):
         # FIX: Added -1 to squeeze to prevent 0-D tensor edge cases
         edge_scores = self.edge_scorer(edge_features).squeeze(-1)
         
-        mask = edge_scores > 0.5
+        mask = edge_scores > CONFIG["prune_thresh"]
         pruned_edge_index = edge_index[:, mask]
 
         if pruned_edge_index.shape[1] == 0:
