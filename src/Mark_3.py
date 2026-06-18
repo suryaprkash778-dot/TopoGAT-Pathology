@@ -182,6 +182,14 @@ class Mark3GNN(nn.Module):
         super().__init__()
         self.pos_encoder = nn.Linear(2, hidden_dim)
 
+        # ---> ADD THIS: The Dynamic Edge Pruning Gate <---
+        self.edge_scorer = nn.Sequential(
+            nn.Linear(hidden_dim * 2, 32),
+            nn.ReLU(),
+            nn.Linear(32, 1),
+            nn.Sigmoid()
+        )
+
         self.conv1 = GATv2Conv(hidden_dim, hidden_dim // 3, heads=3, concat=True)
         self.conv2 = GATv2Conv(hidden_dim, hidden_dim // 3, heads=3, concat=True)
 
@@ -198,6 +206,22 @@ class Mark3GNN(nn.Module):
         # 1. The Transformer Hack (Positional Encoding)
         norm_coords = (coords - coords.mean(dim=0)) / (coords.std(dim=0) + 1e-5)
         pos_nodes = nodes + self.pos_encoder(norm_coords)
+
+        # ---> THE SOLUTION: DYNAMIC EDGE PRUNING <---
+        row, col = edge_index
+        # Look at the features of the two nodes connected by each edge
+        edge_features = torch.cat([pos_nodes[row], pos_nodes[col]], dim=1)
+        
+        # Score the biological relevance of the connection (0.0 to 1.0)
+        edge_scores = self.edge_scorer(edge_features).squeeze()
+        
+        # Snip the edges! Keep only the strong, relevant connections (> 50%)
+        mask = edge_scores > 0.5
+        pruned_edge_index = edge_index[:, mask]
+
+        # Safety net: If it accidentally prunes everything, fallback to the original
+        if pruned_edge_index.shape[1] == 0:
+            pruned_edge_index = edge_index
 
         # 2. GATv2 Spatial Logic
         x1 = F.leaky_relu(self.conv1(pos_nodes, edge_index), 0.01)
