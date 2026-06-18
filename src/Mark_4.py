@@ -438,9 +438,7 @@ def process_slide(slide_path, label, extractor, gnn, criterion_bce, criterion_ms
     
     acc = 100 if (pred_prob >= 0.5) == label else 0
     return loss, acc, pred_prob, weights, cluster_embeddings, master_coords
-# =====================================================================
-# 6. CLOUD MANAGER 
-# =====================================================================
+
 # =====================================================================
 # 6. CLOUD MANAGER (PARALLEL I/O)
 # =====================================================================
@@ -503,9 +501,11 @@ gnn = TopoGAT().to(device)
 
 optimizer = optim.AdamW(list(extractor.parameters()) + list(gnn.parameters()), lr=CONFIG["lr"], weight_decay=1e-4)
 
-# CLAUDE FIX: Setup LR Warmup Scheduler
+# --- THE FIX: Accurate Warmup Tracking ---
+# We must divide by grad_accum so the steps match the optimizer, not the slides!
+warmup_steps = (len(CONFIG["train_chunks"]) * 10) // CONFIG["grad_accum"]
+
 def lr_lambda(step):
-    warmup_steps = len(TRAIN_CHUNKS) * 10  # ~1 epoch of slides
     return min(1.0, step / max(1, warmup_steps))
 
 warmup_scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
