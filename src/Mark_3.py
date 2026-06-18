@@ -306,7 +306,7 @@ def process_slide(slide_path, label, extractor, gnn, criterion_bce, criterion_ms
     master_nodes = torch.cat(all_nodes)
     master_coords = torch.cat(all_coords)
     dist = torch.cdist(master_coords, master_coords)
-    edge_index = ((dist <= 400.0) & (dist > 0)).nonzero(as_tuple=False).t().contiguous()
+    edge_index = ((dist <= 600.0) & (dist > 0)).nonzero(as_tuple=False).t().contiguous()
 
     prediction, cluster_embeddings, weights, x_recon = gnn(master_nodes, edge_index, master_coords)
 
