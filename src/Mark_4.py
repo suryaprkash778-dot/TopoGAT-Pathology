@@ -521,10 +521,21 @@ best_val_loss = float('inf')
 
 if os.path.exists(CHECKPOINT_PATH):
     print("\n[SYSTEM] Found checkpoint! Recovering brain state...")
-    checkpoint = torch.load(CHECKPOINT_PATH)
+    # --- THE FIX: Hardware-Aware Checkpoint Loading ---
+    # 1. Force the entire checkpoint onto the active device immediately
+    checkpoint = torch.load(CHECKPOINT_PATH, map_location=device)
+    
     gnn.load_state_dict(checkpoint['model_state_dict'])
     extractor.load_state_dict(checkpoint['extractor_state_dict'])
     optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+    
+    # 2. Explicitly push all internal optimizer momentum buffers to the GPU
+    # This prevents the dreaded CPU/GPU tensor collision during optimizer.step()
+    for state in optimizer.state.values():
+        for k, v in state.items():
+            if isinstance(v, torch.Tensor):
+                state[k] = v.to(device)
+                
     if 'scheduler_state_dict' in checkpoint:
         scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
     # CLAUDE FIX 1: Safely load warmup scheduler state to prevent double-warmup
