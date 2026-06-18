@@ -370,8 +370,7 @@ def manage_cloud_chunk(chunk_id, download=True):
 extractor = MultiScaleWaveletExtractor().to(device)
 gnn = TopoGAT().to(device)
 
-# FIX: Learning rate set to 0.0002 to stop "Screaming" jumping
-optimizer = optim.AdamW(list(extractor.parameters()) + list(gnn.parameters()), lr=0.0002, weight_decay=1e-4)
+optimizer = optim.AdamW(list(extractor.parameters()) + list(gnn.parameters()), lr=CONFIG["lr"], weight_decay=1e-4)
 
 # CLAUDE FIX: Setup LR Warmup Scheduler
 def lr_lambda(step):
@@ -438,7 +437,7 @@ for epoch in range(start_epoch, EPOCHS + 1):
 
         slides = [f for f in os.listdir('.') if f.endswith('.tif')]
         
-        accumulation_steps = 4 
+        accumulation_steps = CONFIG["grad_accum"]
         slide_count = 0
         optimizer.zero_grad() 
         
