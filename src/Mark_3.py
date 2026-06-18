@@ -190,8 +190,8 @@ class Mark3GNN(nn.Module):
             nn.Sigmoid()
         )
 
-        self.conv1 = GATv2Conv(hidden_dim, hidden_dim // 3, heads=3, concat=True)
-        self.conv2 = GATv2Conv(hidden_dim, hidden_dim // 3, heads=3, concat=True)
+        self.conv1 = GATv2Conv(hidden_dim, hidden_dim // 4, heads=4, concat=True)
+        self.conv2 = GATv2Conv(hidden_dim, hidden_dim // 4, heads=4, concat=True)
 
         self.decoder = nn.Linear(hidden_dim, hidden_dim)  # MSE Structure Head
         self.cluster_head = nn.Linear(hidden_dim, num_clusters)  # ReCal Organization Head
@@ -213,7 +213,7 @@ class Mark3GNN(nn.Module):
         edge_features = torch.cat([pos_nodes[row], pos_nodes[col]], dim=1)
         
         # Score the biological relevance of the connection (0.0 to 1.0)
-        edge_scores = self.edge_scorer(edge_features).squeeze()
+        edge_scores = self.edge_scorer(edge_features).squeeze(-1)
         
         # Snip the edges! Keep only the strong, relevant connections (> 50%)
         mask = edge_scores > 0.5
