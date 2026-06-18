@@ -122,7 +122,18 @@ def get_tissue_coordinates(slide_path, level=4):
             level = slide.level_count - 1
             
         thumb = slide.read_region((0, 0), level, slide.level_dimensions[level])
-        thumb_gray = cv2.cvtColor(np.array(thumb), cv2.COLOR_RGBA2GRAY)
+        thumb_np = np.array(thumb)
+        
+        # --- THE FIX: OpenSlide Alpha-to-White Blending ---
+        # Extract the RGB colors and the Alpha transparency mask
+        rgb = thumb_np[:, :, :3]
+        alpha = thumb_np[:, :, 3]
+        
+        # Force all perfectly transparent pixels (the void) to become white (the glass).
+        # This prevents OpenCV from turning the void into false-positive black tissue.
+        rgb[alpha == 0] = [255, 255, 255]
+        
+        thumb_gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
         _, mask = cv2.threshold(thumb_gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
         y_coords, x_coords = np.nonzero(mask)
 
