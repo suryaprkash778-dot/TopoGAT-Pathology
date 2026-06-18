@@ -34,7 +34,13 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.metrics import confusion_matrix
 import random
-from google.colab import drive
+# --- THE FIX: Environment-Aware Imports ---
+try:
+    from google.colab import drive
+    IN_COLAB = True
+except ImportError:
+    IN_COLAB = False
+    
 import boto3
 from botocore import UNSIGNED
 from botocore.config import Config
