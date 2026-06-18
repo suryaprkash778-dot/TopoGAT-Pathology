@@ -351,7 +351,7 @@ def manage_cloud_chunk(chunk_id, download=True):
 extractor = MultiScaleWaveletExtractor().to(device)
 gnn = Mark3GNN().to(device)
 
-optimizer = optim.AdamW(list(extractor.parameters()) + list(gnn.parameters()), lr=0.005, weight_decay=1e-4)
+optimizer = optim.AdamW(list(extractor.parameters()) + list(gnn.parameters()), lr=0.0002, weight_decay=1e-4)
 scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=EPOCHS)
 
 # The 3-Headed Loss Functions
