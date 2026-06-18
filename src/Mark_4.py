@@ -588,7 +588,9 @@ for epoch in range(start_epoch, EPOCHS + 1):
             
             if slide_count % accumulation_steps == 0:
                 optimizer.step()
-                if epoch == 1: warmup_scheduler.step() # CLAUDE FIX: LR Warmup step
+                # Step the warmup dynamically based on actual optimizer steps, regardless of epoch
+                if warmup_scheduler.last_epoch < warmup_steps:
+                    warmup_scheduler.step()
                 optimizer.zero_grad()
             
             # Extract the python float ONLY for printing (.item())
@@ -597,7 +599,8 @@ for epoch in range(start_epoch, EPOCHS + 1):
             
         if slide_count > 0 and slide_count % accumulation_steps != 0: # CLAUDE FIX: Safe gradient reset check
             optimizer.step()
-            if epoch == 1: warmup_scheduler.step() # CLAUDE FIX: LR Warmup step
+            if warmup_scheduler.last_epoch < warmup_steps:
+                warmup_scheduler.step()
             optimizer.zero_grad()
 
         torch.save({
