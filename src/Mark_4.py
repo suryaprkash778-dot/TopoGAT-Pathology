@@ -323,7 +323,18 @@ def process_slide(slide_path, label, extractor, gnn, criterion_bce, criterion_ms
 
     master_nodes = torch.cat(all_nodes)
     master_coords = torch.cat(all_coords)
-    dist = torch.cdist(master_coords, master_coords)
+    
+    # --- NOVELTY 1: Morpho-Topological Adjacency Matrix ---
+    # 1. Calculate Physical Spatial Distance
+    S_dist = torch.cdist(master_coords, master_coords)
+    
+    # 2. Calculate Biological Feature Similarity (Cosine Similarity Matrix)
+    F_norm = F.normalize(master_nodes, p=2, dim=1)
+    F_sim = torch.mm(F_norm, F_norm.t()) 
+    
+    # 3. Custom Adjacency: Connect ONLY if they are physically close AND biologically related!
+    adj_mask = (S_dist <= CONFIG["connect_radius"]) & (S_dist > 0) & (F_sim >= CONFIG["morpho_thresh"])
+    edge_index = adj_mask.nonzero(as_tuple=False).t().contiguous()
     
     # Connects edges based on the radius set in your Master CONFIG
     edge_index = ((dist <= CONFIG["connect_radius"]) & (dist > 0)).nonzero(as_tuple=False).t().contiguous()
