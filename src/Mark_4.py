@@ -113,15 +113,21 @@ photometric_augment = T.Compose([
 # =====================================================================
 # 3. DATA EXTRACTION & MEMORY MANAGEMENT
 # =====================================================================
-def get_tissue_coordinates(slide_path, downsample_level=4):
+def get_tissue_coordinates(slide_path, level=4):
     try:
         slide = openslide.OpenSlide(slide_path)
-        thumb = slide.read_region((0, 0), downsample_level, slide.level_dimensions[downsample_level])
+        
+        # Safely fallback if a slide has fewer levels than expected
+        if level >= slide.level_count:
+            level = slide.level_count - 1
+            
+        thumb = slide.read_region((0, 0), level, slide.level_dimensions[level])
         thumb_gray = cv2.cvtColor(np.array(thumb), cv2.COLOR_RGBA2GRAY)
         _, mask = cv2.threshold(thumb_gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
         y_coords, x_coords = np.nonzero(mask)
 
-        scale_factor = int(slide.level_downsamples[downsample_level])
+        # Use round() before int() to prevent float-truncation drift on gigapixel coordinates
+        scale_factor = int(round(slide.level_downsamples[level]))
         coords = [[x_coords[i] * scale_factor, y_coords[i] * scale_factor] for i in range(len(x_coords))]
 
         if len(coords) > CONFIG["max_patches"]:
