@@ -443,7 +443,9 @@ def process_slide(slide_path, label, extractor, gnn, criterion_bce, criterion_ms
     # Convert raw logits to a 0-1 probability just for the accuracy tracker and printing
     pred_prob = torch.sigmoid(logits).item()
     
-    acc = 100 if (pred_prob >= 0.5) == label else 0
+    # --- THE FIX: Strict Boolean Logic ---
+    # Explicitly cast label to bool to prevent float-to-bool coercion bugs
+    acc = int((pred_prob >= 0.5) == bool(label)) * 100
     return loss, acc, pred_prob, weights, cluster_embeddings, master_coords
 
 # =====================================================================
