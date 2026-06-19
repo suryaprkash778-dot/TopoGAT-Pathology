@@ -661,16 +661,17 @@ for epoch in range(start_epoch, EPOCHS + 1):
             if loss is None: continue # CLAUDE FIX: Explicit None check
             
             # CLAUDE FIX: Backward pass correctly happens here on the scaled tensor
+            # --- NEW AMP CODE ---
             scaled_loss = loss / accumulation_steps 
-            scaled_loss.backward() 
+            scaler.scale(scaled_loss).backward()  # 1. Scale the loss to prevent vanishing gradients
             
             slide_count += 1
             
             if slide_count % accumulation_steps == 0:
-                optimizer.step()
-                global_step += 1  # --- THE FIX: Tick the global clock ---
+                scaler.step(optimizer)            # 2. Un-scale the gradients and step the optimizer
+                scaler.update()                   # 3. Update the scaler's magnifying glass
                 
-                # Step the warmup using our ironclad global tracker
+                global_step += 1
                 if global_step <= warmup_steps:
                     warmup_scheduler.step()
                 optimizer.zero_grad()
@@ -679,9 +680,13 @@ for epoch in range(start_epoch, EPOCHS + 1):
             print(f"  Train -> {slide} | Pred: {pred:.4f} | Loss: {loss.item():.4f}")
             torch.cuda.empty_cache()
             
-        if slide_count > 0 and slide_count % accumulation_steps != 0: # CLAUDE FIX: Safe gradient reset check
-            optimizer.step()
-            if warmup_scheduler.last_epoch < warmup_steps:
+        # --- NEW AMP CODE ---
+        if slide_count > 0 and slide_count % accumulation_steps != 0:
+            scaler.step(optimizer)                # Same un-scaling trick here!
+            scaler.update()
+            
+            global_step += 1
+            if global_step <= warmup_steps:
                 warmup_scheduler.step()
             optimizer.zero_grad()
 
