@@ -388,23 +388,31 @@ def process_slide(slide_path, label, extractor, gnn, criterion_bce, criterion_ms
     with context, amp_context:
         for patches, batch_coords in loader:
             patches = patches.to(device)
-
-            if is_training:
-                patches = photometric_augment(patches)
-                if patches.size(0) > 1:
-                    # --- THE FIX: GPU-Native Indexing ---
-                    # Generate the permutation directly on the GPU to prevent PCIe bus stalls
-                    ref_idx = torch.randperm(patches.size(0), device=patches.device)
-                    patches = fourier_amplitude_mix(patches, patches[ref_idx])
-
+            # ... [data extraction logic] ...
             all_nodes.append(extractor(patches))
             all_coords.append(batch_coords.to(device))
 
-    # --- THE FIX: Empty Tensor Guard ---
-    # If the boundary guard filtered every single patch (e.g., false-positive dirt on the glass),
-    # all_nodes will be empty. Safely abort before torch.cat causes a fatal crash.
-    if len(all_nodes) == 0:
-        return None, 0, 0, None, None, None
+        # ---------------------------------------------------------
+        # ALL OF THIS MUST REMAIN INDENTED INSIDE THE CONTEXT BLOCK
+        # ---------------------------------------------------------
+        if len(all_nodes) == 0:
+            return None, 0, 0, None, None, None
+
+        from scipy.spatial import cKDTree
+        master_nodes = torch.cat(all_nodes)
+        master_coords = torch.cat(all_coords)
+        
+        # ... [Keep indenting the KDTree logic] ...
+
+        logits, cluster_embeddings, weights, x_recon, log_vars = gnn(master_nodes, edge_index, master_coords)
+
+        # ... [Keep indenting the loss math] ...
+
+        # Convert raw logits to a 0-1 probability just for the accuracy tracker and printing
+        pred_prob = torch.sigmoid(logits).item()
+        
+        acc = int((pred_prob >= 0.5) == bool(label)) * 100
+        return loss, acc, pred_prob, weights, cluster_embeddings, master_coords
 
     from scipy.spatial import cKDTree
     
@@ -669,21 +677,29 @@ for epoch in range(start_epoch, EPOCHS + 1):
             
             slide_count += 1
             
+            # Extract the python float ONLY for printing (.item())
+            print(f"  Train -> {slide} | Pred: {pred:.4f} | Loss: {loss.item():.4f}")
+
             if slide_count % accumulation_steps == 0:
-                scaler.step(optimizer)            # 2. Un-scale the gradients and step the optimizer
-                scaler.update()                   # 3. Update the scaler's magnifying glass
+                scaler.step(optimizer)            
+                scaler.update()                   
                 
                 global_step += 1
                 if global_step <= warmup_steps:
                     warmup_scheduler.step()
                 optimizer.zero_grad()
+                
+                # --- THE FIX: Sync Telemetry with Global Steps ---
+                # Only log the data exactly when the optimizer steps
+                writer.add_scalar('Training/Loss', scaled_loss.item(), global_step)
+                writer.add_scalar('System/Learning_Rate', optimizer.param_groups[0]['lr'], global_step)
+                writer.add_scalars('Hydra_Uncertainty_Dials', {
+                    'Diagnostic': log_vars[0].item(),
+                    'Reconstruction': log_vars[1].item(),
+                    'Clustering': log_vars[2].item()
+                }, global_step)
             
-            # Extract the python float ONLY for printing (.item())
-            print(f"  Train -> {slide} | Pred: {pred:.4f} | Loss: {loss.item():.4f}")
-            
-            # --- NEW: Stream metrics to TensorBoard ---
-            writer.add_scalar('Training/Loss', loss.item(), global_step)
-            writer.add_scalar('System/Learning_Rate', optimizer.param_groups[0]['lr'], global_step)
+            torch.cuda.empty_cache()
             
             # Track the Hydra Loss dials to watch the AI prioritize tasks!
             writer.add_scalars('Hydra_Uncertainty_Dials', {
@@ -726,8 +742,11 @@ for epoch in range(start_epoch, EPOCHS + 1):
         manage_cloud_chunk(chunk, download=False)
 
     start_chunk = 0
-    # CLAUDE FIX 2: Unconditionally step the cosine scheduler every epoch so it correctly reaches T_max
-    scheduler.step() 
+    
+    # --- THE FIX: Prevent Scheduler Collisions ---
+    # Only allow the Cosine Annealing to take over AFTER the warmup phase is 100% complete
+    if global_step > warmup_steps:
+        scheduler.step() 
 
     print("\n[PHASE 2] VALIDATION")
     val_loss, val_correct, val_total = 0, 0, 0
