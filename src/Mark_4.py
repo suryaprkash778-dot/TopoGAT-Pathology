@@ -386,22 +386,32 @@ def process_slide(slide_path, label, extractor, gnn, criterion_bce, criterion_ms
     pairs = tree.query_pairs(CONFIG["connect_radius"])
     
     if len(pairs) > 0:
-        row, col = zip(*pairs)
-        row = torch.tensor(row, dtype=torch.long, device=device)
-        col = torch.tensor(col, dtype=torch.long, device=device)
+        # --- THE FIX: High-Speed NumPy Bridge & Strict Typing ---
+        # Converting the set to a NumPy array first is exponentially faster than Python zip()
+        pairs_np = np.array(list(pairs), dtype=np.int64)
+        edge_tensor = torch.tensor(pairs_np, dtype=torch.long, device=device)
         
-        # KDTree returns unidirectional pairs (i < j). Stack them to make it bidirectional:
-        edge_index = torch.stack([torch.cat([row, col]), torch.cat([col, row])], dim=0)
+        row, col = edge_tensor[:, 0], edge_tensor[:, 1]
         
-        # 2. Compute Biological Similarity ONLY for physically connected pairs! O(E) instead of O(N^2)
+        # 2. Compute Biological Similarity on unidirectional pairs (Cuts GPU math in half!)
         F_norm = F.normalize(master_nodes, p=2, dim=1)
-        sim_scores = (F_norm[edge_index[0]] * F_norm[edge_index[1]]).sum(dim=1)
+        sim_scores = (F_norm[row] * F_norm[col]).sum(dim=1)
         
         # 3. Filter connections by biological threshold
         mask = sim_scores >= CONFIG["morpho_thresh"]
-        edge_index = edge_index[:, mask]
+        row_filtered = row[mask]
+        col_filtered = col[mask]
+        
+        # 4. Make surviving edges bidirectional, with a strict fallback if the mask wiped them all out
+        if len(row_filtered) > 0:
+            edge_index = torch.stack([
+                torch.cat([row_filtered, col_filtered]), 
+                torch.cat([col_filtered, row_filtered])
+            ], dim=0)
+        else:
+            edge_index = torch.empty((2, 0), dtype=torch.long, device=device)
     else:
-        # Fallback if tissue is incredibly sparse and has zero connections
+        # Fallback if tissue is incredibly sparse and has zero physical connections
         edge_index = torch.empty((2, 0), dtype=torch.long, device=device)
     # Catch the raw logits and the new log_vars parameter!
     logits, cluster_embeddings, weights, x_recon, log_vars = gnn(master_nodes, edge_index, master_coords)
