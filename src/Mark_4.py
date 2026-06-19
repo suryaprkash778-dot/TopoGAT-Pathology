@@ -382,7 +382,10 @@ def process_slide(slide_path, label, extractor, gnn, criterion_bce, criterion_ms
     else:
         extractor.eval(); gnn.eval()
 
-    with context:
+    # --- NEW: AMP Autocast Context ---
+    amp_context = torch.cuda.amp.autocast(enabled=is_training and torch.cuda.is_available())
+    
+    with context, amp_context:
         for patches, batch_coords in loader:
             patches = patches.to(device)
 
@@ -563,6 +566,8 @@ scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=EPOCHS)
 criterion_bce = nn.BCEWithLogitsLoss()
 criterion_mse = nn.MSELoss()
 criterion_recal = ReCalLoss()
+# --- NEW: Initialize AMP Scaler ---
+scaler = torch.cuda.amp.GradScaler(enabled=torch.cuda.is_available())
 
 start_epoch = 1
 start_chunk = 0
