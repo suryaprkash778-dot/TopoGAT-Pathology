@@ -126,30 +126,6 @@ photometric_augment = T.Compose([
 # =====================================================================
 # 3. DATA EXTRACTION & MEMORY MANAGEMENT
 # =====================================================================
-def get_tissue_coordinates(slide_path, level=4):
-    try:
-        slide = openslide.OpenSlide(slide_path)
-        
-        # Safely fallback if a slide has fewer levels than expected
-        if level >= slide.level_count:
-            level = slide.level_count - 1
-            
-        thumb = slide.read_region((0, 0), level, slide.level_dimensions[level])
-        thumb_np = np.array(thumb)
-        
-        # --- THE FIX: OpenSlide Alpha-to-White Blending ---
-        # Extract the RGB colors and the Alpha transparency mask
-        rgb = thumb_np[:, :, :3]
-        alpha = thumb_np[:, :, 3]
-        
-        # Force all perfectly transparent pixels (the void) to become white (the glass).
-        # This prevents OpenCV from turning the void into false-positive black tissue.
-        rgb[alpha == 0] = [255, 255, 255]
-        
-        thumb_gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
-        _, mask = cv2.threshold(thumb_gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
-        y_coords, x_coords = np.nonzero(mask)
-
 def get_tissue_coordinates(slide_path, level=4, patch_size=256):
     try:
         slide = openslide.OpenSlide(slide_path)
@@ -198,7 +174,6 @@ def get_tissue_coordinates(slide_path, level=4, patch_size=256):
         return coords
     except Exception as e:
         return []
-
 class ClinicalWSIDataset(Dataset):
     def __init__(self, slide_path, coords_list, patch_size=256):
         self.slide = openslide.OpenSlide(slide_path)
