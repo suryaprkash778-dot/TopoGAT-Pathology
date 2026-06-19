@@ -427,9 +427,14 @@ def process_slide(slide_path, label, extractor, gnn, criterion_bce, criterion_ms
 
     # --- THE FIX: AI-Controlled Adaptive Loss Balancing ---
     # The AI uses its learned uncertainty dials to scale the importance of each task dynamically!
-    loss_0 = loss_diag * torch.exp(-log_vars[0]) + log_vars[0]
-    loss_1 = loss_recon * torch.exp(-log_vars[1]) + log_vars[1]
-    loss_2 = loss_org * torch.exp(-log_vars[2]) + log_vars[2]
+    
+    # 1. Clamp the log variances to prevent gradient explosion (-5 to 5 is the industry standard)
+    safe_log_vars = torch.clamp(log_vars, min=-5.0, max=5.0)
+
+    # 2. Apply the safe variables to the Kendall Uncertainty Loss equations
+    loss_0 = loss_diag * torch.exp(-safe_log_vars[0]) + safe_log_vars[0]
+    loss_1 = loss_recon * torch.exp(-safe_log_vars[1]) + safe_log_vars[1]
+    loss_2 = loss_org * torch.exp(-safe_log_vars[2]) + safe_log_vars[2]
 
     loss = loss_0 + loss_1 + loss_2
 
