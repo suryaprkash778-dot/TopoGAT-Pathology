@@ -28,6 +28,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 import torchvision.transforms as T
+from torch.utils.tensorboard import SummaryWriter  # --- THE FIX: Telemetry Engine ---
 import torchvision.transforms.functional as TF
 from torch_geometric.nn import GATv2Conv
 import matplotlib.pyplot as plt
