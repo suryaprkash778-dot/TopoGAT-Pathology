@@ -311,7 +311,10 @@ class TopoGAT(nn.Module):
 
         a_v = self.attention_V(x_res)
         a_u = self.attention_U(x_res)
-        weights = F.softmax(self.attention_weights(a_v * a_u), dim=0)
+        
+        # --- THE FIX: Explicit Dimensionality ---
+        # Force the shape to (N, 1) to prevent broadcasting mismatch if edge cases arise
+        weights = F.softmax(self.attention_weights(a_v * a_u), dim=0).view(-1, 1)
 
         logits = self.classifier(torch.sum(x_res * weights, dim=0, keepdim=True))
         # Now we pass the learned control dials out to the loss calculator
