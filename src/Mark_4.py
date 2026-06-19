@@ -664,6 +664,7 @@ for epoch in range(start_epoch, EPOCHS + 1):
             'optimizer_state_dict': optimizer.state_dict(),
             'scheduler_state_dict': scheduler.state_dict(),
             'warmup_scheduler_state_dict': warmup_scheduler.state_dict(),
+            'global_step': global_step,  # --- THE FIX: Save the clock ---
             'torch_rng': torch.get_rng_state(),
             'torch_cuda_rng': torch.cuda.get_rng_state_all(),
             'numpy_rng': np.random.get_state(),
