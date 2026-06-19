@@ -668,9 +668,13 @@ for epoch in range(start_epoch, EPOCHS + 1):
             print(f"[SYSTEM] Validation Loss Improved! Saved best weights.")
 
 # ----------------- PHASE 3: THE FINAL HOLD-OUT TEST -----------------
+# ----------------- PHASE 3: THE FINAL HOLD-OUT TEST -----------------
 print("\n=========================================\n[PHASE 3] FINAL HOLD-OUT TEST\n=========================================")
 if os.path.exists(BEST_MODEL_PATH):
-    checkpoint = torch.load(BEST_MODEL_PATH)
+    # --- THE FIX: Hardware-Aware Testing ---
+    # Force the elite weights directly onto the active hardware to prevent tensor collisions
+    checkpoint = torch.load(BEST_MODEL_PATH, map_location=device)
+    
     gnn.load_state_dict(checkpoint['model_state_dict'])
     extractor.load_state_dict(checkpoint['extractor_state_dict'])
     print("[SYSTEM] Loaded elite performing weights from Phase 2.")
