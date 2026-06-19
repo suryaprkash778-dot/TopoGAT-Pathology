@@ -665,21 +665,20 @@ for epoch in range(start_epoch, EPOCHS + 1):
         for slide in slides:
             label = 1.0 if "tumor" in slide else 0.0
             
-            # CLAUDE FIX: process_slide now returns the raw loss tensor
             loss, _, pred, _, _, _ = process_slide(slide, label, extractor, gnn, criterion_bce, criterion_mse, criterion_recal, is_training=True)
             
-            if loss is None: continue # CLAUDE FIX: Explicit None check
+            if loss is None: continue 
             
-            # CLAUDE FIX: Backward pass correctly happens here on the scaled tensor
-            # --- NEW AMP CODE ---
+            # 1. Scale the loss to prevent vanishing gradients
             scaled_loss = loss / accumulation_steps 
-            scaler.scale(scaled_loss).backward()  # 1. Scale the loss to prevent vanishing gradients
+            scaler.scale(scaled_loss).backward()  
             
             slide_count += 1
             
-            # Extract the python float ONLY for printing (.item())
+            # Print to terminal
             print(f"  Train -> {slide} | Pred: {pred:.4f} | Loss: {loss.item():.4f}")
 
+            # Master Step & Telemetry Sync
             if slide_count % accumulation_steps == 0:
                 scaler.step(optimizer)            
                 scaler.update()                   
@@ -689,8 +688,7 @@ for epoch in range(start_epoch, EPOCHS + 1):
                     warmup_scheduler.step()
                 optimizer.zero_grad()
                 
-                # --- THE FIX: Sync Telemetry with Global Steps ---
-                # Only log the data exactly when the optimizer steps
+                # --- Sync Telemetry with Global Steps ---
                 writer.add_scalar('Training/Loss', scaled_loss.item(), global_step)
                 writer.add_scalar('System/Learning_Rate', optimizer.param_groups[0]['lr'], global_step)
                 writer.add_scalars('Hydra_Uncertainty_Dials', {
@@ -698,6 +696,26 @@ for epoch in range(start_epoch, EPOCHS + 1):
                     'Reconstruction': log_vars[1].item(),
                     'Clustering': log_vars[2].item()
                 }, global_step)
+            
+            torch.cuda.empty_cache()
+            
+        # Leftover Slides Catch Block
+        if slide_count > 0 and slide_count % accumulation_steps != 0:
+            scaler.step(optimizer)                
+            scaler.update()
+            
+            global_step += 1
+            if global_step <= warmup_steps:
+                warmup_scheduler.step()
+            optimizer.zero_grad()
+            
+            writer.add_scalar('Training/Loss', scaled_loss.item(), global_step)
+            writer.add_scalar('System/Learning_Rate', optimizer.param_groups[0]['lr'], global_step)
+            writer.add_scalars('Hydra_Uncertainty_Dials', {
+                'Diagnostic': log_vars[0].item(),
+                'Reconstruction': log_vars[1].item(),
+                'Clustering': log_vars[2].item()
+            }, global_step)
             
             torch.cuda.empty_cache()
             
