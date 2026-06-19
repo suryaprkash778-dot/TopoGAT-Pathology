@@ -205,19 +205,24 @@ class MultiScaleWaveletExtractor(nn.Module):
         self.wavelet = nn.Conv2d(1, 4, kernel_size=2, stride=2, bias=False)
         self.wavelet.weight = nn.Parameter(haar_weights, requires_grad=True)
 
-        self.pool_small = nn.AdaptiveAvgPool2d((4, 4))
-        self.pool_med = nn.AdaptiveAvgPool2d((8, 8))
-        self.pool_large = nn.AdaptiveAvgPool2d((16, 16))
+        # --- THE FIX: Dynamic Architecture Scaling ---
+        self.pool_sizes = [4, 8, 16]
+        self.pool_small = nn.AdaptiveAvgPool2d((self.pool_sizes[0], self.pool_sizes[0]))
+        self.pool_med = nn.AdaptiveAvgPool2d((self.pool_sizes[1], self.pool_sizes[1]))
+        self.pool_large = nn.AdaptiveAvgPool2d((self.pool_sizes[2], self.pool_sizes[2]))
+
+        # Automatically calculate the flattened tensor dimension: 4 channels * sum(H*W)
+        self.raw_feat_dim = 4 * sum(s**2 for s in self.pool_sizes)
 
         self.compressor = nn.Sequential(
-            nn.Linear(1344, 512),
+            nn.Linear(self.raw_feat_dim, 512),
             nn.LeakyReLU(0.01),
             nn.Linear(512, hidden_dim)
         )
         self.decoder = nn.Sequential(
             nn.Linear(hidden_dim, 512),
             nn.ReLU(),
-            nn.Linear(512, 1344)
+            nn.Linear(512, self.raw_feat_dim)
         )
 
     def extract_raw(self, x):
