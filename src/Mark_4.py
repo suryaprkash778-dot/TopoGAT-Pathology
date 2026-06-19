@@ -565,6 +565,13 @@ if os.path.exists(CHECKPOINT_PATH):
     if 'warmup_scheduler_state_dict' in checkpoint:
         warmup_scheduler.load_state_dict(checkpoint['warmup_scheduler_state_dict'])
 
+    # --- THE FIX: Restoring Deterministic RNG States ---
+    if 'torch_rng' in checkpoint:
+        torch.set_rng_state(checkpoint['torch_rng'])
+        torch.cuda.set_rng_state_all(checkpoint['torch_cuda_rng'])
+        np.random.set_state(checkpoint['numpy_rng'])
+        random.setstate(checkpoint['python_rng'])
+
     start_epoch = checkpoint['epoch']
     start_chunk = checkpoint.get('chunk', 0)
     best_val_loss = checkpoint.get('best_val_loss', float('inf'))
@@ -637,6 +644,7 @@ for epoch in range(start_epoch, EPOCHS + 1):
                 warmup_scheduler.step()
             optimizer.zero_grad()
 
+        # --- THE FIX: Capturing Deterministic RNG States ---
         torch.save({
             'epoch': epoch,
             'chunk': chunk,
@@ -645,7 +653,11 @@ for epoch in range(start_epoch, EPOCHS + 1):
             'extractor_state_dict': extractor.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
             'scheduler_state_dict': scheduler.state_dict(),
-            'warmup_scheduler_state_dict': warmup_scheduler.state_dict() # CLAUDE FIX 1: Save warmup scheduler
+            'warmup_scheduler_state_dict': warmup_scheduler.state_dict(),
+            'torch_rng': torch.get_rng_state(),
+            'torch_cuda_rng': torch.cuda.get_rng_state_all(),
+            'numpy_rng': np.random.get_state(),
+            'python_rng': random.getstate()
         }, CHECKPOINT_PATH)
         print(f"[SYSTEM] Chunk {chunk} checkpoint saved.")
 
