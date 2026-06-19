@@ -172,7 +172,10 @@ def get_tissue_coordinates(slide_path, level=4, patch_size=256):
             _, unique_idx = np.unique(grid_keys, return_index=True)
             coords = coords_np[unique_idx[:CONFIG["max_patches"]]].tolist()
         return coords
+    
+    # --- THE FIX: Exception Visibility ---
     except Exception as e:
+        print(f"  [WARNING] WSI Extraction failed for {slide_path}: {e}")
         return []
 class ClinicalWSIDataset(Dataset):
     def __init__(self, slide_path, coords_list, patch_size=256):
