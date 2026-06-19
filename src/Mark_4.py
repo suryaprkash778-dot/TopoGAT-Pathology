@@ -371,7 +371,7 @@ def export_explainability_maps(slide_name, coords, weights, cluster_logits):
 
 def process_slide(slide_path, label, extractor, gnn, criterion_bce, criterion_mse, criterion_recal, is_training=True):
     coords = get_tissue_coordinates(slide_path)
-    if not coords: return None, 0, 0, None, None, None # CLAUDE FIX: Explicit None returns
+    if not coords: return None, 0, 0, None, None, None 
 
     loader = DataLoader(ClinicalWSIDataset(slide_path, coords), batch_size=CONFIG["batch_size"], shuffle=False)
     all_nodes, all_coords = [], []
@@ -382,18 +382,24 @@ def process_slide(slide_path, label, extractor, gnn, criterion_bce, criterion_ms
     else:
         extractor.eval(); gnn.eval()
 
-    # --- NEW: AMP Autocast Context ---
+    # --- AMP Autocast Context ---
     amp_context = torch.cuda.amp.autocast(enabled=is_training and torch.cuda.is_available())
     
     with context, amp_context:
         for patches, batch_coords in loader:
             patches = patches.to(device)
-            # ... [data extraction logic] ...
+
+            if is_training:
+                patches = photometric_augment(patches)
+                if patches.size(0) > 1:
+                    ref_idx = torch.randperm(patches.size(0), device=patches.device)
+                    patches = fourier_amplitude_mix(patches, patches[ref_idx])
+
             all_nodes.append(extractor(patches))
             all_coords.append(batch_coords.to(device))
 
         # ---------------------------------------------------------
-        # ALL OF THIS MUST REMAIN INDENTED INSIDE THE CONTEXT BLOCK
+        # ALL OF THIS IS NOW SAFELY INDENTED INSIDE THE CONTEXT!
         # ---------------------------------------------------------
         if len(all_nodes) == 0:
             return None, 0, 0, None, None, None
@@ -402,16 +408,66 @@ def process_slide(slide_path, label, extractor, gnn, criterion_bce, criterion_ms
         master_nodes = torch.cat(all_nodes)
         master_coords = torch.cat(all_coords)
         
-        # ... [Keep indenting the KDTree logic] ...
+        # 1. Find physical neighbors using an ultra-fast CPU KDTree
+        coords_np = master_coords.cpu().numpy()
+        tree = cKDTree(coords_np)
+        pairs = tree.query_pairs(CONFIG["connect_radius"])
+        
+        if len(pairs) > 0:
+            pairs_np = np.array(list(pairs), dtype=np.int64)
+            edge_tensor = torch.tensor(pairs_np, dtype=torch.long, device=device)
+            
+            row, col = edge_tensor[:, 0], edge_tensor[:, 1]
+            
+            # 2. Compute Biological Similarity
+            F_norm = F.normalize(master_nodes, p=2, dim=1)
+            sim_scores = (F_norm[row] * F_norm[col]).sum(dim=1)
+            
+            # 3. Filter connections by biological threshold
+            mask = sim_scores >= CONFIG["morpho_thresh"]
+            row_filtered = row[mask]
+            col_filtered = col[mask]
+            
+            # 4. Make surviving edges bidirectional or fallback to k-NN
+            if len(row_filtered) > 0:
+                edge_index = torch.stack([
+                    torch.cat([row_filtered, col_filtered]), 
+                    torch.cat([col_filtered, row_filtered])
+                ], dim=0)
+            else:
+                from torch_geometric.nn import knn_graph
+                from torch_geometric.utils import to_undirected
+                k_val = min(4, master_coords.size(0) - 1)
+                edge_index = to_undirected(knn_graph(master_coords, k=k_val)) if k_val > 0 else torch.empty((2, 0), dtype=torch.long, device=device)
+        else:
+            from torch_geometric.nn import knn_graph
+            from torch_geometric.utils import to_undirected
+            k_val = min(4, master_coords.size(0) - 1)
+            edge_index = to_undirected(knn_graph(master_coords, k=k_val)) if k_val > 0 else torch.empty((2, 0), dtype=torch.long, device=device)
 
         logits, cluster_embeddings, weights, x_recon, log_vars = gnn(master_nodes, edge_index, master_coords)
 
-        # ... [Keep indenting the loss math] ...
+        loss_diag = criterion_bce(logits, torch.tensor([[label]]).to(device))
+        loss_recon = criterion_mse(x_recon, master_nodes)
+        loss_org = criterion_recal(cluster_embeddings)
 
-        # Convert raw logits to a 0-1 probability just for the accuracy tracker and printing
+        # AI-Controlled Adaptive Loss Balancing
+        safe_log_vars = torch.clamp(log_vars, min=-5.0, max=5.0)
+
+        loss_0 = loss_diag * torch.exp(-safe_log_vars[0]) + safe_log_vars[0]
+        loss_1 = loss_recon * torch.exp(-safe_log_vars[1]) + safe_log_vars[1]
+        loss_2 = loss_org * torch.exp(-safe_log_vars[2]) + safe_log_vars[2]
+
+        loss = loss_0 + loss_1 + loss_2
+
+        if not is_training:
+            loss = loss.detach()
+            weights = weights.detach()
+            cluster_embeddings = cluster_embeddings.detach()
+
         pred_prob = torch.sigmoid(logits).item()
-        
         acc = int((pred_prob >= 0.5) == bool(label)) * 100
+        
         return loss, acc, pred_prob, weights, cluster_embeddings, master_coords
 
     from scipy.spatial import cKDTree
