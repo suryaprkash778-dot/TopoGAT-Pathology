@@ -412,10 +412,19 @@ def process_slide(slide_path, label, extractor, gnn, criterion_bce, criterion_ms
                 torch.cat([col_filtered, row_filtered])
             ], dim=0)
         else:
-            edge_index = torch.empty((2, 0), dtype=torch.long, device=device)
+            # --- THE FIX: k-NN Graph Collapse Fallback ---
+            from torch_geometric.nn import knn_graph
+            from torch_geometric.utils import to_undirected
+            
+            k_val = min(4, master_coords.size(0) - 1)
+            edge_index = to_undirected(knn_graph(master_coords, k=k_val)) if k_val > 0 else torch.empty((2, 0), dtype=torch.long, device=device)
     else:
-        # Fallback if tissue is incredibly sparse and has zero physical connections
-        edge_index = torch.empty((2, 0), dtype=torch.long, device=device)
+        # --- THE FIX: k-NN Graph Collapse Fallback ---
+        from torch_geometric.nn import knn_graph
+        from torch_geometric.utils import to_undirected
+        
+        k_val = min(4, master_coords.size(0) - 1)
+        edge_index = to_undirected(knn_graph(master_coords, k=k_val)) if k_val > 0 else torch.empty((2, 0), dtype=torch.long, device=device)
     # Catch the raw logits and the new log_vars parameter!
     logits, cluster_embeddings, weights, x_recon, log_vars = gnn(master_nodes, edge_index, master_coords)
 
