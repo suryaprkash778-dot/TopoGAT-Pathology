@@ -568,6 +568,8 @@ criterion_mse = nn.MSELoss()
 criterion_recal = ReCalLoss()
 # --- NEW: Initialize AMP Scaler ---
 scaler = torch.cuda.amp.GradScaler(enabled=torch.cuda.is_available())
+# --- NEW: Boot up TensorBoard ---
+writer = SummaryWriter(log_dir=os.path.join(CHECKPOINT_DIR, "tensorboard_logs"))
 
 start_epoch = 1
 start_chunk = 0
@@ -678,6 +680,18 @@ for epoch in range(start_epoch, EPOCHS + 1):
             
             # Extract the python float ONLY for printing (.item())
             print(f"  Train -> {slide} | Pred: {pred:.4f} | Loss: {loss.item():.4f}")
+            
+            # --- NEW: Stream metrics to TensorBoard ---
+            writer.add_scalar('Training/Loss', loss.item(), global_step)
+            writer.add_scalar('System/Learning_Rate', optimizer.param_groups[0]['lr'], global_step)
+            
+            # Track the Hydra Loss dials to watch the AI prioritize tasks!
+            writer.add_scalars('Hydra_Uncertainty_Dials', {
+                'Diagnostic': log_vars[0].item(),
+                'Reconstruction': log_vars[1].item(),
+                'Clustering': log_vars[2].item()
+            }, global_step)
+            
             torch.cuda.empty_cache()
             
         # --- NEW AMP CODE ---
@@ -737,6 +751,9 @@ for epoch in range(start_epoch, EPOCHS + 1):
     else:
         val_accuracy = (val_correct / val_total) * 100
         print(f"  --> Validation Accuracy: {val_accuracy:.2f}% | Loss: {val_loss:.4f}")
+        # --- NEW: Log Epoch-level Validation ---
+        writer.add_scalar('Validation/Accuracy', val_accuracy, epoch)
+        writer.add_scalar('Validation/Loss', val_loss, epoch)
 
         if val_loss < best_val_loss:
             best_val_loss = val_loss
