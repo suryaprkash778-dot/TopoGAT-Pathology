@@ -693,6 +693,7 @@ for epoch in range(start_epoch, EPOCHS + 1):
             'model_state_dict': gnn.state_dict(),
             'extractor_state_dict': extractor.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
+            'scaler_state_dict': scaler.state_dict(), # --- NEW: Save AMP state ---
             'scheduler_state_dict': scheduler.state_dict(),
             'warmup_scheduler_state_dict': warmup_scheduler.state_dict(),
             'global_step': global_step,  # --- THE FIX: Save the clock ---
