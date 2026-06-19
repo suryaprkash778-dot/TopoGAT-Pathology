@@ -637,8 +637,10 @@ for epoch in range(start_epoch, EPOCHS + 1):
             
             if slide_count % accumulation_steps == 0:
                 optimizer.step()
-                # Step the warmup dynamically based on actual optimizer steps, regardless of epoch
-                if warmup_scheduler.last_epoch < warmup_steps:
+                global_step += 1  # --- THE FIX: Tick the global clock ---
+                
+                # Step the warmup using our ironclad global tracker
+                if global_step <= warmup_steps:
                     warmup_scheduler.step()
                 optimizer.zero_grad()
             
