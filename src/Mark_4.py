@@ -368,6 +368,12 @@ def process_slide(slide_path, label, extractor, gnn, criterion_bce, criterion_ms
             all_nodes.append(extractor(patches))
             all_coords.append(batch_coords.to(device))
 
+    # --- THE FIX: Empty Tensor Guard ---
+    # If the boundary guard filtered every single patch (e.g., false-positive dirt on the glass),
+    # all_nodes will be empty. Safely abort before torch.cat causes a fatal crash.
+    if len(all_nodes) == 0:
+        return None, 0, 0, None, None, None
+
     from scipy.spatial import cKDTree
     
     master_nodes = torch.cat(all_nodes)
