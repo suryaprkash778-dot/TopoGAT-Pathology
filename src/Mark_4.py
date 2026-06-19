@@ -671,7 +671,6 @@ for epoch in range(start_epoch, EPOCHS + 1):
             print(f"[SYSTEM] Validation Loss Improved! Saved best weights.")
 
 # ----------------- PHASE 3: THE FINAL HOLD-OUT TEST -----------------
-# ----------------- PHASE 3: THE FINAL HOLD-OUT TEST -----------------
 print("\n=========================================\n[PHASE 3] FINAL HOLD-OUT TEST\n=========================================")
 if os.path.exists(BEST_MODEL_PATH):
     # --- THE FIX: Hardware-Aware Testing ---
