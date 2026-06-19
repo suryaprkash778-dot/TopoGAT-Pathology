@@ -540,9 +540,17 @@ criterion_recal = ReCalLoss()
 
 start_epoch = 1
 start_chunk = 0
+global_step = 0  # --- THE FIX: Explicit Step Tracker ---
 best_val_loss = float('inf')
 
 if os.path.exists(CHECKPOINT_PATH):
+    # ... [Keep your existing model/RNG loading logic here] ...
+    
+    start_epoch = checkpoint['epoch']
+    start_chunk = checkpoint.get('chunk', 0)
+    global_step = checkpoint.get('global_step', 0) # --- THE FIX: Recover Step ---
+    best_val_loss = checkpoint.get('best_val_loss', float('inf'))
+    print(f"[SYSTEM] Successfully resumed. Picking up at Epoch {start_epoch}, Chunk {start_chunk + 1}, Global Step {global_step}")
     print("\n[SYSTEM] Found checkpoint! Recovering brain state...")
     # --- THE FIX: Hardware-Aware Checkpoint Loading ---
     # 1. Force the entire checkpoint onto the active device immediately
