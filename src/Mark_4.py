@@ -755,7 +755,7 @@ for epoch in range(start_epoch, EPOCHS + 1):
             
             torch.cuda.empty_cache()
             
-        # Leftover Slides Catch Block
+        # --- THE FIX: Pristine Catch Block ---
         if slide_count > 0 and slide_count % accumulation_steps != 0:
             scaler.step(optimizer)                
             scaler.update()
@@ -773,27 +773,7 @@ for epoch in range(start_epoch, EPOCHS + 1):
                 'Clustering': log_vars[2].item()
             }, global_step)
             
-            torch.cuda.empty_cache()
-            
-            # Track the Hydra Loss dials to watch the AI prioritize tasks!
-            writer.add_scalars('Hydra_Uncertainty_Dials', {
-                'Diagnostic': log_vars[0].item(),
-                'Reconstruction': log_vars[1].item(),
-                'Clustering': log_vars[2].item()
-            }, global_step)
-            
-            torch.cuda.empty_cache()
-            
-        # --- NEW AMP CODE ---
-        if slide_count > 0 and slide_count % accumulation_steps != 0:
-            scaler.step(optimizer)                # Same un-scaling trick here!
-            scaler.update()
-            
-            global_step += 1
-            if global_step <= warmup_steps:
-                warmup_scheduler.step()
-            optimizer.zero_grad()
-
+        torch.cuda.empty_cache()
         # --- THE FIX: Capturing Deterministic RNG States ---
         torch.save({
             'epoch': epoch,
