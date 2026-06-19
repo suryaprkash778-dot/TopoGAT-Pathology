@@ -66,6 +66,23 @@ os.makedirs(CHECKPOINT_DIR, exist_ok=True)
 CHECKPOINT_PATH = os.path.join(CHECKPOINT_DIR, "mid_flight_checkpoint_mk4.pth")
 BEST_MODEL_PATH = os.path.join(CHECKPOINT_DIR, "best_mark4.pth")
 
+# --- THE FIX: Dynamic VRAM Sniffer ---
+def get_optimal_batch_size():
+    if not torch.cuda.is_available():
+        print("[SYSTEM] CPU Mode Detected. Throttling batch size to 16.")
+        return 16
+    
+    vram_gb = torch.cuda.get_device_properties(0).total_memory / (1024**3)
+    if vram_gb >= 30.0:
+        print(f"[SYSTEM] Titan-Class GPU Detected ({vram_gb:.1f}GB). Maxing throughput (Batch: 256).")
+        return 256
+    elif vram_gb >= 20.0:
+        print(f"[SYSTEM] High-End GPU Detected ({vram_gb:.1f}GB). Scaling throughput (Batch: 128).")
+        return 128
+    else:
+        print(f"[SYSTEM] Standard GPU Detected ({vram_gb:.1f}GB). Setting safe baseline (Batch: 64).")
+        return 64
+
 # --- THE MASTER HYPERPARAMETER DIAL ---
 CONFIG = {
     "epochs": 10,
@@ -76,7 +93,7 @@ CONFIG = {
     "max_patches": 800,        # How many tissue chunks to extract per slide
     "grid_bins": 29,           # Math: int(sqrt(max_patches)) + 1
     "hash_mult": 31,           # Must be slightly larger than grid_bins
-    "batch_size": 64,          # DataLoader batch size
+    "batch_size": get_optimal_batch_size(),  # --- THE FIX: Auto-Scaling Allocation ---
     
     "gnn_heads": 4,            # Number of multi-core attention heads
     "connect_radius": 600.0,   # Physical distance (pixels) to draw initial edges
