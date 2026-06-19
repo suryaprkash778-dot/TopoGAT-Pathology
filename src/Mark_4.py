@@ -150,7 +150,7 @@ def get_tissue_coordinates(slide_path, level=4):
         _, mask = cv2.threshold(thumb_gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
         y_coords, x_coords = np.nonzero(mask)
 
-        def get_tissue_coordinates(slide_path, level=4, patch_size=256):
+def get_tissue_coordinates(slide_path, level=4, patch_size=256):
     try:
         slide = openslide.OpenSlide(slide_path)
         
