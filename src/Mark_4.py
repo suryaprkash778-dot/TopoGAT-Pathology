@@ -470,90 +470,7 @@ def process_slide(slide_path, label, extractor, gnn, criterion_bce, criterion_ms
         
         return loss, acc, pred_prob, weights, cluster_embeddings, master_coords
 
-    from scipy.spatial import cKDTree
     
-    master_nodes = torch.cat(all_nodes)
-    master_coords = torch.cat(all_coords)
-    
-    # --- NOVELTY 1: Morpho-Topological Adjacency Matrix (O(N log N) Scalable) ---
-    # 1. Find physical neighbors using an ultra-fast CPU KDTree
-    coords_np = master_coords.cpu().numpy()
-    tree = cKDTree(coords_np)
-    pairs = tree.query_pairs(CONFIG["connect_radius"])
-    
-    if len(pairs) > 0:
-        # --- THE FIX: High-Speed NumPy Bridge & Strict Typing ---
-        # Converting the set to a NumPy array first is exponentially faster than Python zip()
-        pairs_np = np.array(list(pairs), dtype=np.int64)
-        edge_tensor = torch.tensor(pairs_np, dtype=torch.long, device=device)
-        
-        row, col = edge_tensor[:, 0], edge_tensor[:, 1]
-        
-        # 2. Compute Biological Similarity on unidirectional pairs (Cuts GPU math in half!)
-        F_norm = F.normalize(master_nodes, p=2, dim=1)
-        sim_scores = (F_norm[row] * F_norm[col]).sum(dim=1)
-        
-        # 3. Filter connections by biological threshold
-        mask = sim_scores >= CONFIG["morpho_thresh"]
-        row_filtered = row[mask]
-        col_filtered = col[mask]
-        
-        # 4. Make surviving edges bidirectional, with a strict fallback if the mask wiped them all out
-        if len(row_filtered) > 0:
-            edge_index = torch.stack([
-                torch.cat([row_filtered, col_filtered]), 
-                torch.cat([col_filtered, row_filtered])
-            ], dim=0)
-        else:
-            # --- THE FIX: k-NN Graph Collapse Fallback ---
-            from torch_geometric.nn import knn_graph
-            from torch_geometric.utils import to_undirected
-            
-            k_val = min(4, master_coords.size(0) - 1)
-            edge_index = to_undirected(knn_graph(master_coords, k=k_val)) if k_val > 0 else torch.empty((2, 0), dtype=torch.long, device=device)
-    else:
-        # --- THE FIX: k-NN Graph Collapse Fallback ---
-        from torch_geometric.nn import knn_graph
-        from torch_geometric.utils import to_undirected
-        
-        k_val = min(4, master_coords.size(0) - 1)
-        edge_index = to_undirected(knn_graph(master_coords, k=k_val)) if k_val > 0 else torch.empty((2, 0), dtype=torch.long, device=device)
-    # Catch the raw logits and the new log_vars parameter!
-    logits, cluster_embeddings, weights, x_recon, log_vars = gnn(master_nodes, edge_index, master_coords)
-
-    # Pass RAW logits to BCEWithLogitsLoss for absolute numerical stability
-    loss_diag = criterion_bce(logits, torch.tensor([[label]]).to(device))
-    
-    loss_recon = criterion_mse(x_recon, master_nodes)
-    loss_org = criterion_recal(cluster_embeddings)
-
-    # --- THE FIX: AI-Controlled Adaptive Loss Balancing ---
-    # The AI uses its learned uncertainty dials to scale the importance of each task dynamically!
-    
-    # 1. Clamp the log variances to prevent gradient explosion (-5 to 5 is the industry standard)
-    safe_log_vars = torch.clamp(log_vars, min=-5.0, max=5.0)
-
-    # 2. Apply the safe variables to the Kendall Uncertainty Loss equations
-    loss_0 = loss_diag * torch.exp(-safe_log_vars[0]) + safe_log_vars[0]
-    loss_1 = loss_recon * torch.exp(-safe_log_vars[1]) + safe_log_vars[1]
-    loss_2 = loss_org * torch.exp(-safe_log_vars[2]) + safe_log_vars[2]
-
-    loss = loss_0 + loss_1 + loss_2
-
-    # --- THE FIX: Strict Memory Safety ---
-    # Explicitly sever all tensors from the PyTorch graph when we aren't training
-    if not is_training:
-        loss = loss.detach()
-        weights = weights.detach()
-        cluster_embeddings = cluster_embeddings.detach()
-
-    # Convert raw logits to a 0-1 probability just for the accuracy tracker and printing
-    pred_prob = torch.sigmoid(logits).item()
-    
-    # --- THE FIX: Strict Boolean Logic ---
-    # Explicitly cast label to bool to prevent float-to-bool coercion bugs
-    acc = int((pred_prob >= 0.5) == bool(label)) * 100
-    return loss, acc, pred_prob, weights, cluster_embeddings, master_coords
 
 # =====================================================================
 # 6. CLOUD MANAGER (PARALLEL I/O)
@@ -754,7 +671,7 @@ for epoch in range(start_epoch, EPOCHS + 1):
                 }, global_step)
             
             torch.cuda.empty_cache()
-            
+        
         # --- THE FIX: Pristine Catch Block ---
         if slide_count > 0 and slide_count % accumulation_steps != 0:
             scaler.step(optimizer)                
