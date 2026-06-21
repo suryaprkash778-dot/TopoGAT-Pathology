@@ -585,46 +585,44 @@ global_step = 0  # --- THE FIX: Explicit Step Tracker ---
 best_val_loss = float('inf')
 
 if os.path.exists(CHECKPOINT_PATH):
-    # ... [Keep your existing model/RNG loading logic here] ...
-    
-    start_epoch = checkpoint['epoch']
-    start_chunk = checkpoint.get('chunk', 0)
-    global_step = checkpoint.get('global_step', 0) # --- THE FIX: Recover Step ---
-    best_val_loss = checkpoint.get('best_val_loss', float('inf'))
-    print(f"[SYSTEM] Successfully resumed. Picking up at Epoch {start_epoch}, Chunk {start_chunk + 1}, Global Step {global_step}")
     print("\n[SYSTEM] Found checkpoint! Recovering brain state...")
-    # --- THE FIX: Hardware-Aware Checkpoint Loading ---
-    # 1. Force the entire checkpoint onto the active device immediately
+    
+    # 1. LOAD THE FILE FIRST
     checkpoint = torch.load(CHECKPOINT_PATH, map_location=device)
     
+    # 2. Extract progression variables
+    start_epoch = checkpoint.get('epoch', 1)
+    start_chunk = checkpoint.get('chunk', 0)
+    global_step = checkpoint.get('global_step', 0) 
+    best_val_loss = checkpoint.get('best_val_loss', float('inf'))
+    
+    print(f"[SYSTEM] Successfully resumed. Picking up at Epoch {start_epoch}, Chunk {start_chunk + 1}, Global Step {global_step}")
+    
+    # 3. Load model and optimizer states
     gnn.load_state_dict(checkpoint['model_state_dict'])
     extractor.load_state_dict(checkpoint['extractor_state_dict'])
     optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
     
-    # 2. Explicitly push all internal optimizer momentum buffers to the GPU
-    # This prevents the dreaded CPU/GPU tensor collision during optimizer.step()
+    # 4. Explicitly push all internal optimizer momentum buffers to the GPU
     for state in optimizer.state.values():
         for k, v in state.items():
             if isinstance(v, torch.Tensor):
                 state[k] = v.to(device)
                 
+    # 5. Safely load scaler and schedulers
     if 'scheduler_state_dict' in checkpoint:
         scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
-    # CLAUDE FIX 1: Safely load warmup scheduler state to prevent double-warmup
     if 'warmup_scheduler_state_dict' in checkpoint:
         warmup_scheduler.load_state_dict(checkpoint['warmup_scheduler_state_dict'])
+    if 'scaler_state_dict' in checkpoint:
+        scaler.load_state_dict(checkpoint['scaler_state_dict'])
 
-    # --- THE FIX: Restoring Deterministic RNG States ---
+    # 6. Restore Deterministic RNG States
     if 'torch_rng' in checkpoint:
         torch.set_rng_state(checkpoint['torch_rng'])
         torch.cuda.set_rng_state_all(checkpoint['torch_cuda_rng'])
         np.random.set_state(checkpoint['numpy_rng'])
         random.setstate(checkpoint['python_rng'])
-
-    start_epoch = checkpoint['epoch']
-    start_chunk = checkpoint.get('chunk', 0)
-    best_val_loss = checkpoint.get('best_val_loss', float('inf'))
-    print(f"[SYSTEM] Successfully resumed. Picking up at Epoch {start_epoch}, Chunk {start_chunk + 1}")
 
 if start_epoch == 1 and start_chunk == 0 and not os.path.exists(CHECKPOINT_PATH):
     print("\n[HACK 1] INITIATING WARMUP (3 Slides)...")
