@@ -265,9 +265,15 @@ class ReCalLoss(nn.Module):
         log_probs = F.log_softmax(node_embeddings, dim=1)
         classification_entropy = -torch.sum(probs * log_probs) / node_embeddings.shape[0]
         class_prob = probs.mean(dim=0)
-        # CLAUDE FIX: Aligned mathematical log bases (both use torch.log now)
         class_entropy = -torch.sum(class_prob * torch.log(class_prob + 1e-8))
-        return classification_entropy - class_entropy
+        
+        # --- THE FIX: The Hydra Exploit Clamp ---
+        # We shift the entropy to be strictly non-negative so the 
+        # uncertainty weighting cannot multiply a negative loss to -infinity.
+        max_entropy = torch.log(torch.tensor(node_embeddings.shape[1], dtype=torch.float32, device=node_embeddings.device))
+        loss = (classification_entropy - class_entropy) + max_entropy
+        
+        return torch.clamp(loss, min=0.0)
 
 # =====================================================================
 # 4. MARK 4 GNN: TopoGAT
@@ -476,6 +482,9 @@ def process_slide(slide_path, label, extractor, gnn, criterion_bce, criterion_ms
         loss_2 = loss_org * torch.exp(-safe_log_vars[2]) + safe_log_vars[2]
 
         loss = loss_0 + loss_1 + loss_2
+        
+        # Extract the pure, unweighted metrics for TensorBoard
+        raw_metrics = {'diag': loss_diag.item(), 'recon': loss_recon.item(), 'org': loss_org.item()}
 
         if not is_training:
             loss = loss.detach()
@@ -485,7 +494,7 @@ def process_slide(slide_path, label, extractor, gnn, criterion_bce, criterion_ms
         pred_prob = torch.sigmoid(logits).item()
         acc = int((pred_prob >= 0.5) == bool(label)) * 100
         
-        return loss, acc, pred_prob, weights, cluster_embeddings, master_coords, log_vars
+        return loss, acc, pred_prob, weights, cluster_embeddings, master_coords, log_vars, raw_metrics
 
     
 
