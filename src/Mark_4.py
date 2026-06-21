@@ -776,7 +776,7 @@ for epoch in range(start_epoch, EPOCHS + 1):
             slides = [f for f in os.listdir('.') if f.endswith('.tif')]
             for slide in slides:
                 label = 1.0 if "tumor" in slide else 0.0
-                loss, acc, pred, _, _, _, _ = process_slide(slide, label, extractor, gnn, criterion_bce, criterion_mse, criterion_recal, is_training=False)
+                loss, acc, pred, _, _, _, _, _ = process_slide(slide, label, extractor, gnn, criterion_bce, criterion_mse, criterion_recal, is_training=False)
                 
                 if loss is not None: # CLAUDE FIX: Explicit None check
                     val_loss += loss.item() # CLAUDE FIX: Extract tensor for tallying
