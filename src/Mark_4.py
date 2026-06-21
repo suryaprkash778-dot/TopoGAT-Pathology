@@ -394,7 +394,7 @@ def export_explainability_maps(slide_name, coords, weights, cluster_logits):
 
 def process_slide(slide_path, label, extractor, gnn, criterion_bce, criterion_mse, criterion_recal, is_training=True):
     coords = get_tissue_coordinates(slide_path)
-    if not coords: return None, 0, 0, None, None, None, None 
+    if not coords: return None, 0, 0, None, None, None, None, {} 
 
     loader = DataLoader(ClinicalWSIDataset(slide_path, coords), batch_size=CONFIG["batch_size"], shuffle=False)
     all_nodes, all_coords = [], []
@@ -425,7 +425,7 @@ def process_slide(slide_path, label, extractor, gnn, criterion_bce, criterion_ms
         # ALL OF THIS IS NOW SAFELY INDENTED INSIDE THE CONTEXT!
         # ---------------------------------------------------------
         if len(all_nodes) == 0:
-            return None, 0, 0, None, None, None, None
+            return None, 0, 0, None, None, None, None, {}
 
         from scipy.spatial import cKDTree
         master_nodes = torch.cat(all_nodes)
