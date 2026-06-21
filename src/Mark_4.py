@@ -677,7 +677,17 @@ for epoch in range(start_epoch, EPOCHS + 1):
         for slide in slides:
             label = 1.0 if "tumor" in slide else 0.0
             
-            loss, _, pred, _, _, _, log_vars = process_slide(slide, label, extractor, gnn, criterion_bce, criterion_mse, criterion_recal, is_training=True)
+            # Unpack the 8th variable (raw_metrics)
+            loss, _, pred, _, _, _, log_vars, raw_metrics = process_slide(slide, label, extractor, gnn, criterion_bce, criterion_mse, criterion_recal, is_training=True)
+            
+            if loss is None: continue 
+            
+            # --- NEW: Write the raw, unweighted diagnostics immediately ---
+            writer.add_scalars('Raw_Loss_Components', {
+                'Diagnostic_BCE': raw_metrics['diag'],
+                'Reconstruction_MSE': raw_metrics['recon'],
+                'Clustering_Entropy': raw_metrics['org']
+            }, global_step + slide_count) # Staggered slightly for per-slide resolution
             
             if loss is None: continue 
             
