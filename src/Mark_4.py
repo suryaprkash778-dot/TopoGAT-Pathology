@@ -319,24 +319,29 @@ class TopoGAT(nn.Module):
         bio_scores = self.edge_scorer(edge_features).squeeze(-1)
         
         # --- THE DARTS UPGRADE: Continuous Relaxation & Soft Masking ---
-        safe_tau = torch.clamp(self.learned_tau, min=10.0)
-        edge_distances = torch.norm(coords[row] - coords[col], dim=1)
+        # 1. Capture the active AMP dtype (FP16 or FP32)
+        current_dtype = pos_nodes.dtype
+        
+        # 2. Cast the DARTS parameters to match the context
+        safe_tau = torch.clamp(self.learned_tau, min=10.0).to(current_dtype)
+        edge_distances = torch.norm(coords[row] - coords[col], dim=1).to(current_dtype)
         spatial_decay = torch.exp(-edge_distances / safe_tau)
         
         decayed_scores = bio_scores * spatial_decay
         
         steepness = 15.0  
-        edge_weights = torch.sigmoid((decayed_scores - self.learned_thresh) * steepness)
+        edge_weights = torch.sigmoid((decayed_scores - self.learned_thresh.to(current_dtype)) * steepness)
         
         mask = edge_weights > 0.05  
         pruned_edge_index = edge_index[:, mask]
         
-        # Force shape to (N, 1) to match PyG's edge_dim requirement
-        pruned_edge_weights = edge_weights[mask].view(-1, 1) 
+        # 3. Force shape to (N, 1) AND strictly enforce dtype for PyG
+        pruned_edge_weights = edge_weights[mask].view(-1, 1).to(current_dtype) 
 
         if pruned_edge_index.shape[1] == 0:
             pruned_edge_index = edge_index
-            pruned_edge_weights = torch.ones((edge_index.shape[1], 1), device=device)
+            # 4. Enforce the same dtype on the fallback tensor
+            pruned_edge_weights = torch.ones((edge_index.shape[1], 1), dtype=current_dtype, device=device)
 
         # Inject the structural weights into the GAT to preserve the gradient graph!
         x1 = F.leaky_relu(self.conv1(pos_nodes, pruned_edge_index, edge_attr=pruned_edge_weights), 0.01)
