@@ -823,7 +823,7 @@ with torch.no_grad():
         slides = [f for f in os.listdir('.') if f.endswith('.tif')]
         for slide in slides:
             label = 1.0 if "tumor" in slide else 0.0
-            _, _, pred, weights, clusters, master_coords, _ = process_slide(slide, label, extractor, gnn, criterion_bce, criterion_mse, criterion_recal, is_training=False)
+            _, _, pred, weights, clusters, master_coords, _, _ = process_slide(slide, label, extractor, gnn, criterion_bce, criterion_mse, criterion_recal, is_training=False)
             
             # CLAUDE FIX: The None-Guard to stop empty slides from crashing Explainability Maps
             if master_coords is None: continue 
