@@ -602,7 +602,7 @@ if os.path.exists(CHECKPOINT_PATH):
     print("\n[SYSTEM] Found checkpoint! Recovering brain state...")
     
     # 1. LOAD THE FILE FIRST
-    checkpoint = torch.load(CHECKPOINT_PATH, map_location=device)
+    checkpoint = torch.load(CHECKPOINT_PATH, map_location=device, weights_only=False)
     
     # 2. Extract progression variables
     start_epoch = checkpoint.get('epoch', 1)
@@ -807,7 +807,7 @@ print("\n=========================================\n[PHASE 3] FINAL HOLD-OUT TES
 if os.path.exists(BEST_MODEL_PATH):
     # --- THE FIX: Hardware-Aware Testing ---
     # Force the elite weights directly onto the active hardware to prevent tensor collisions
-    checkpoint = torch.load(BEST_MODEL_PATH, map_location=device)
+    checkpoint = torch.load(BEST_MODEL_PATH, map_location=device, weights_only=False)
     
     gnn.load_state_dict(checkpoint['model_state_dict'])
     extractor.load_state_dict(checkpoint['extractor_state_dict'])
