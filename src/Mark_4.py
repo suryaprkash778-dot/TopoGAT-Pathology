@@ -284,11 +284,16 @@ class TopoGAT(nn.Module):
             nn.Sigmoid()
         )
 
+        # --- THE DARTS UPGRADE: Self-Tuning Biological Dials ---
+        self.learned_tau = nn.Parameter(torch.tensor([200.0]))
+        self.learned_thresh = nn.Parameter(torch.tensor([0.5]))
+
         # FIX: Divisible by 4 math alignment
-        # Dynamically scales the math alignment based on your CONFIG heads
         h = CONFIG["gnn_heads"]
-        self.conv1 = GATv2Conv(hidden_dim, hidden_dim // h, heads=h, concat=True)
-        self.conv2 = GATv2Conv(hidden_dim, hidden_dim // h, heads=h, concat=True)
+        
+        # --- THE FIX: edge_dim=1 allows the DARTS gradients to flow backward! ---
+        self.conv1 = GATv2Conv(hidden_dim, hidden_dim // h, heads=h, concat=True, edge_dim=1)
+        self.conv2 = GATv2Conv(hidden_dim, hidden_dim // h, heads=h, concat=True, edge_dim=1)
 
         self.decoder = nn.Linear(hidden_dim, hidden_dim) 
         self.cluster_head = nn.Linear(hidden_dim, num_clusters) 
@@ -313,22 +318,29 @@ class TopoGAT(nn.Module):
         # FIX: Added -1 to squeeze to prevent 0-D tensor edge cases
         bio_scores = self.edge_scorer(edge_features).squeeze(-1)
         
-        # --- NOVELTY 3: Spatial Decay Penalty (Mimicking Chemical Signals) ---
-        # The biological attention score exponentially decays the further away two cells are.
-        # Equation: Score = Bio_Score * exp(-Distance / Tau)
+        # --- THE DARTS UPGRADE: Continuous Relaxation & Soft Masking ---
+        safe_tau = torch.clamp(self.learned_tau, min=10.0)
         edge_distances = torch.norm(coords[row] - coords[col], dim=1)
-        spatial_decay = torch.exp(-edge_distances / CONFIG["decay_tau"])
+        spatial_decay = torch.exp(-edge_distances / safe_tau)
         
         decayed_scores = bio_scores * spatial_decay
-        mask = decayed_scores > CONFIG["prune_thresh"]
+        
+        steepness = 15.0  
+        edge_weights = torch.sigmoid((decayed_scores - self.learned_thresh) * steepness)
+        
+        mask = edge_weights > 0.05  
         pruned_edge_index = edge_index[:, mask]
+        
+        # Force shape to (N, 1) to match PyG's edge_dim requirement
+        pruned_edge_weights = edge_weights[mask].view(-1, 1) 
 
         if pruned_edge_index.shape[1] == 0:
             pruned_edge_index = edge_index
+            pruned_edge_weights = torch.ones((edge_index.shape[1], 1), device=device)
 
-        # CLAUDE FIX: Actually feeding the pruned edges to the convolutions!
-        x1 = F.leaky_relu(self.conv1(pos_nodes, pruned_edge_index), 0.01)
-        x2 = F.leaky_relu(self.conv2(x1, pruned_edge_index), 0.01)
+        # Inject the structural weights into the GAT to preserve the gradient graph!
+        x1 = F.leaky_relu(self.conv1(pos_nodes, pruned_edge_index, edge_attr=pruned_edge_weights), 0.01)
+        x2 = F.leaky_relu(self.conv2(x1, pruned_edge_index, edge_attr=pruned_edge_weights), 0.01)
 
         x_res = pos_nodes + x1 + x2
 
@@ -532,7 +544,22 @@ def manage_cloud_chunk(chunk_id, download=True):
 extractor = MultiScaleWaveletExtractor().to(device)
 gnn = TopoGAT().to(device)
 
-optimizer = optim.AdamW(list(extractor.parameters()) + list(gnn.parameters()), lr=CONFIG["lr"], weight_decay=1e-4)
+# 1. Isolate the "DNA" (The self-optimizing hyperparameters and Hydra dials)
+meta_params = [gnn.learned_tau, gnn.learned_thresh, gnn.loss_log_vars]
+meta_ids = set(id(p) for p in meta_params)
+
+# 2. Group the standard "Brain" weights
+base_params = [p for p in extractor.parameters() if id(p) not in meta_ids] + \
+              [p for p in gnn.parameters() if id(p) not in meta_ids]
+
+# --- THE FIX: Multi-Speed Meta-Optimizer ---
+optimizer = optim.AdamW([
+    # LOBE 1: The Neural Network. Cautious learning rate, standard weight decay.
+    {'params': base_params, 'lr': CONFIG["lr"], 'weight_decay': 1e-4},
+    
+    # LOBE 2: The Meta-Engine. 50x faster learning rate, strictly ZERO weight decay.
+    {'params': meta_params, 'lr': 0.01, 'weight_decay': 0.0}
+])
 
 # --- THE FIX: Accurate Warmup Tracking ---
 # We must divide by grad_accum so the steps match the optimizer, not the slides!
