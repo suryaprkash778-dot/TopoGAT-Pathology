@@ -383,7 +383,7 @@ def export_explainability_maps(slide_name, coords, weights, cluster_logits):
 
 def process_slide(slide_path, label, extractor, gnn, criterion_bce, criterion_mse, criterion_recal, is_training=True):
     coords = get_tissue_coordinates(slide_path)
-    if not coords: return None, 0, 0, None, None, None 
+    if not coords: return None, 0, 0, None, None, None, None 
 
     loader = DataLoader(ClinicalWSIDataset(slide_path, coords), batch_size=CONFIG["batch_size"], shuffle=False)
     all_nodes, all_coords = [], []
@@ -414,7 +414,7 @@ def process_slide(slide_path, label, extractor, gnn, criterion_bce, criterion_ms
         # ALL OF THIS IS NOW SAFELY INDENTED INSIDE THE CONTEXT!
         # ---------------------------------------------------------
         if len(all_nodes) == 0:
-            return None, 0, 0, None, None, None
+            return None, 0, 0, None, None, None, None
 
         from scipy.spatial import cKDTree
         master_nodes = torch.cat(all_nodes)
@@ -480,7 +480,7 @@ def process_slide(slide_path, label, extractor, gnn, criterion_bce, criterion_ms
         pred_prob = torch.sigmoid(logits).item()
         acc = int((pred_prob >= 0.5) == bool(label)) * 100
         
-        return loss, acc, pred_prob, weights, cluster_embeddings, master_coords
+        return loss, acc, pred_prob, weights, cluster_embeddings, master_coords, log_vars
 
     
 
@@ -665,7 +665,7 @@ for epoch in range(start_epoch, EPOCHS + 1):
         for slide in slides:
             label = 1.0 if "tumor" in slide else 0.0
             
-            loss, _, pred, _, _, _ = process_slide(slide, label, extractor, gnn, criterion_bce, criterion_mse, criterion_recal, is_training=True)
+            loss, _, pred, _, _, _, log_vars = process_slide(slide, label, extractor, gnn, criterion_bce, criterion_mse, criterion_recal, is_training=True)
             
             if loss is None: continue 
             
@@ -754,7 +754,7 @@ for epoch in range(start_epoch, EPOCHS + 1):
             slides = [f for f in os.listdir('.') if f.endswith('.tif')]
             for slide in slides:
                 label = 1.0 if "tumor" in slide else 0.0
-                loss, acc, pred, _, _, _ = process_slide(slide, label, extractor, gnn, criterion_bce, criterion_mse, criterion_recal, is_training=False)
+                loss, acc, pred, _, _, _, _ = process_slide(slide, label, extractor, gnn, criterion_bce, criterion_mse, criterion_recal, is_training=False)
                 
                 if loss is not None: # CLAUDE FIX: Explicit None check
                     val_loss += loss.item() # CLAUDE FIX: Extract tensor for tallying
@@ -801,7 +801,7 @@ with torch.no_grad():
         slides = [f for f in os.listdir('.') if f.endswith('.tif')]
         for slide in slides:
             label = 1.0 if "tumor" in slide else 0.0
-            _, _, pred, weights, clusters, master_coords = process_slide(slide, label, extractor, gnn, criterion_bce, criterion_mse, criterion_recal, is_training=False)
+            _, _, pred, weights, clusters, master_coords, _ = process_slide(slide, label, extractor, gnn, criterion_bce, criterion_mse, criterion_recal, is_training=False)
             
             # CLAUDE FIX: The None-Guard to stop empty slides from crashing Explainability Maps
             if master_coords is None: continue 
