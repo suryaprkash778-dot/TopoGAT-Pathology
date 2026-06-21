@@ -477,7 +477,8 @@ def process_slide(slide_path, label, extractor, gnn, criterion_bce, criterion_ms
         # AI-Controlled Adaptive Loss Balancing
         safe_log_vars = torch.clamp(log_vars, min=-5.0, max=5.0)
 
-        loss_0 = loss_diag * torch.exp(-safe_log_vars[0]) + safe_log_vars[0]
+        # THE FIX: Pure, unweighted BCE gradient. Starvation is now impossible.
+        loss_0 = loss_diag 
         loss_1 = loss_recon * torch.exp(-safe_log_vars[1]) + safe_log_vars[1]
         loss_2 = loss_org * torch.exp(-safe_log_vars[2]) + safe_log_vars[2]
 
