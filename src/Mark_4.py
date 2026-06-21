@@ -97,11 +97,11 @@ CONFIG = {
     
     "gnn_heads": 4,            # Number of multi-core attention heads
     "connect_radius": 600.0,   # Physical distance (pixels) to draw initial edges
-    "prune_thresh": 0.5,       # Confidence needed (0 to 1) for Edge Pruner to keep a connection
+    
 
     # --- NOVELTY MATH DIALS ---
     "morpho_thresh": 0.75,     # Minimum biological cosine similarity to allow a connection
-    "decay_tau": 200.0,        # The decay rate of biological chemical signals across distance
+    
     
     "lr": 0.0002,              # Learning Rate
     "grad_accum": 4            # How many slides to average before stepping
