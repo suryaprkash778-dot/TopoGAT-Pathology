@@ -699,7 +699,7 @@ for epoch in range(start_epoch, EPOCHS + 1):
             slide_count += 1
             
             # Print to terminal
-            print(f"  Train -> {slide} | Pred: {pred:.4f} | Loss: {loss.item():.4f}")
+            print(f"  Train -> {slide} | Pred: {pred:.4f} | Loss: {loss.item():.4f} | Diag: {raw_metrics['diag']:.4f} | Recon: {raw_metrics['recon']:.4f} | Org: {raw_metrics['org']:.4f} | Tau: {gnn.learned_tau.item():.1f} | Thresh: {gnn.learned_thresh.item():.4f}")
 
             # Master Step & Telemetry Sync
             if slide_count % accumulation_steps == 0:
