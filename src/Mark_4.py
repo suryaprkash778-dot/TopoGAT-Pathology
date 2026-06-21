@@ -689,7 +689,7 @@ for epoch in range(start_epoch, EPOCHS + 1):
                 'Clustering_Entropy': raw_metrics['org']
             }, global_step + slide_count) # Staggered slightly for per-slide resolution
             
-            if loss is None: continue 
+            
             
             # 1. Scale the loss to prevent vanishing gradients
             scaled_loss = loss / accumulation_steps 
