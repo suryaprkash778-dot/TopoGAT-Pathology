@@ -633,8 +633,9 @@ if os.path.exists(CHECKPOINT_PATH):
 
     # 6. Restore Deterministic RNG States
     if 'torch_rng' in checkpoint:
-        torch.set_rng_state(checkpoint['torch_rng'])
-        torch.cuda.set_rng_state_all(checkpoint['torch_cuda_rng'])
+        # Pull the PyTorch RNG states back to the CPU where the manager expects them
+        torch.set_rng_state(checkpoint['torch_rng'].cpu())
+        torch.cuda.set_rng_state_all([s.cpu() for s in checkpoint['torch_cuda_rng']])
         np.random.set_state(checkpoint['numpy_rng'])
         random.setstate(checkpoint['python_rng'])
 
