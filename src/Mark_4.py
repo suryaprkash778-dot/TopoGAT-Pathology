@@ -578,8 +578,8 @@ optimizer = optim.AdamW([
     # LOBE 1: The Neural Network. Cautious learning rate, standard weight decay.
     {'params': base_params, 'lr': CONFIG["lr"], 'weight_decay': 1e-4},
     
-    # LOBE 2: The Meta-Engine. 50x faster learning rate, strictly ZERO weight decay.
-    {'params': meta_params, 'lr': 0.01, 'weight_decay': 0.0}
+    # THE FIX: Throttled Meta-Engine. Slower learning rate, moderate regularization.
+    {'params': meta_params, 'lr': 0.002, 'weight_decay': 1e-4}
 ])
 
 # --- THE FIX: Accurate Warmup Tracking ---
