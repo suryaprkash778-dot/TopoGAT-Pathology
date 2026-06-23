@@ -685,8 +685,8 @@ for epoch in range(start_epoch, EPOCHS + 1):
         for slide in slides:
             label = 1.0 if "tumor" in slide else 0.0
             
-            # Unpack the 8th variable (raw_metrics)
-            loss, _, pred, _, _, _, log_vars, raw_metrics = process_slide(slide, label, extractor, gnn, criterion_bce, criterion_mse, criterion_recal, is_training=True)
+            # THE FIX: Safely capture 'weights' (4th variable) for the MIL diagnostic
+            loss, _, pred, weights, _, _, log_vars, raw_metrics = process_slide(slide, label, extractor, gnn, criterion_bce, criterion_mse, criterion_recal, is_training=True)
             
             if loss is None: continue 
             
