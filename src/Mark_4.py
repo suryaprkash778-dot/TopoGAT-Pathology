@@ -366,8 +366,10 @@ class TopoGAT(nn.Module):
         weights = F.softmax(self.attention_weights(a_v * a_u), dim=0).view(-1, 1)
 
         logits = self.classifier(torch.sum(x_res * weights, dim=0, keepdim=True))
-        # Now we pass the learned control dials out to the loss calculator
-        return logits, cluster_embeddings, weights, x_recon, self.loss_log_vars
+        # THE FIX: Package the edge statistics to monitor graph collapse
+        edge_stats = (pruned_edge_index.shape[1], edge_index.shape[1])
+        
+        return logits, cluster_embeddings, weights, x_recon, self.loss_log_vars, edge_stats
 
 # =====================================================================
 # 5. EXPLAINABILITY & PROCESSING ENGINE
@@ -468,7 +470,8 @@ def process_slide(slide_path, label, extractor, gnn, criterion_bce, criterion_ms
             k_val = min(4, master_coords.size(0) - 1)
             edge_index = to_undirected(knn_graph(master_coords, k=k_val)) if k_val > 0 else torch.empty((2, 0), dtype=torch.long, device=device)
 
-        logits, cluster_embeddings, weights, x_recon, log_vars = gnn(master_nodes, edge_index, master_coords)
+        # Catch the new edge_stats tuple
+        logits, cluster_embeddings, weights, x_recon, log_vars, edge_stats = gnn(master_nodes, edge_index, master_coords)
 
         loss_diag = criterion_bce(logits, torch.tensor([[label]]).to(device))
         loss_recon = criterion_mse(x_recon, master_nodes)
@@ -484,8 +487,11 @@ def process_slide(slide_path, label, extractor, gnn, criterion_bce, criterion_ms
 
         loss = loss_0 + loss_1 + loss_2
         
-        # Extract the pure, unweighted metrics for TensorBoard
-        raw_metrics = {'diag': loss_diag.item(), 'recon': loss_recon.item(), 'org': loss_org.item()}
+        # THE FIX: Add the edge counts to the dictionary to avoid unpacking crashes
+        raw_metrics = {
+            'diag': loss_diag.item(), 'recon': loss_recon.item(), 'org': loss_org.item(),
+            'edges_kept': edge_stats[0], 'edges_total': edge_stats[1]
+        }
 
         if not is_training:
             loss = loss.detach()
@@ -700,8 +706,7 @@ for epoch in range(start_epoch, EPOCHS + 1):
             slide_count += 1
             
             # Print to terminal
-            print(f"  Train -> {slide} | Pred: {pred:.4f} | Diag: {raw_metrics['diag']:.4f} | Recon: {raw_metrics['recon']:.4f} | Org: {raw_metrics['org']:.4f} | Tau: {gnn.learned_tau.item():.1f}")
-            
+            print(f"  Train -> {slide} | Pred: {pred:.4f} | Diag: {raw_metrics['diag']:.4f} | Thresh: {gnn.learned_thresh.item():.4f} | Edges: {raw_metrics['edges_kept']} / {raw_metrics['edges_total']}")
             # THE FIX: MIL Attention Diagnostics
             print(f"    ↳ MIL Attn | Max: {weights.max().item():.4f} | Min: {weights.min().item():.4f} | Std: {weights.std().item():.6f}")
             # Master Step & Telemetry Sync
