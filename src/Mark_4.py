@@ -377,10 +377,15 @@ class TopoGAT(nn.Module):
         combined_feat = torch.cat([attn_pooled, max_pooled], dim=1)
         logits = self.classifier(combined_feat)
 
-        # THE FIX: Package the edge statistics to monitor graph collapse
-        edge_stats = (pruned_edge_index.shape[1], edge_index.shape[1])
+        # THE FIX: Pack all graph and pooling diagnostics into a single dictionary
+        telemetry = {
+            'edges_kept': pruned_edge_index.shape[1],
+            'edges_total': edge_index.shape[1],
+            'attn_norm': torch.norm(attn_pooled, p=2).item(),
+            'max_norm': torch.norm(max_pooled, p=2).item()
+        }
         
-        return logits, cluster_embeddings, weights, x_recon, self.loss_log_vars, edge_stats
+        return logits, cluster_embeddings, weights, x_recon, self.loss_log_vars, telemetry
 
 # =====================================================================
 # 5. EXPLAINABILITY & PROCESSING ENGINE
@@ -481,9 +486,9 @@ def process_slide(slide_path, label, extractor, gnn, criterion_bce, criterion_ms
             k_val = min(4, master_coords.size(0) - 1)
             edge_index = to_undirected(knn_graph(master_coords, k=k_val)) if k_val > 0 else torch.empty((2, 0), dtype=torch.long, device=device)
 
-        # Catch the new edge_stats tuple
-        logits, cluster_embeddings, weights, x_recon, log_vars, edge_stats = gnn(master_nodes, edge_index, master_coords)
-
+        # Catch the expanded telemetry dictionary
+        logits, cluster_embeddings, weights, x_recon, log_vars, telemetry = gnn(master_nodes, edge_index, master_coords)
+        
         loss_diag = criterion_bce(logits, torch.tensor([[label]]).to(device))
         loss_recon = criterion_mse(x_recon, master_nodes)
         loss_org = criterion_recal(cluster_embeddings)
@@ -498,10 +503,11 @@ def process_slide(slide_path, label, extractor, gnn, criterion_bce, criterion_ms
 
         loss = loss_0 + loss_1 + loss_2
         
-        # THE FIX: Add the edge counts to the dictionary to avoid unpacking crashes
+        # Route the expanded telemetry
         raw_metrics = {
             'diag': loss_diag.item(), 'recon': loss_recon.item(), 'org': loss_org.item(),
-            'edges_kept': edge_stats[0], 'edges_total': edge_stats[1]
+            'edges_kept': telemetry['edges_kept'], 'edges_total': telemetry['edges_total'],
+            'attn_norm': telemetry['attn_norm'], 'max_norm': telemetry['max_norm']
         }
 
         if not is_training:
