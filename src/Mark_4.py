@@ -368,8 +368,7 @@ class TopoGAT(nn.Module):
         a_v = self.attention_V(x_res)
         a_u = self.attention_U(x_res)
         
-        # --- THE FIX: Explicit Dimensionality & Temperature Scaling ---
-        # Divide by temperature before softmax to sharpen the distribution
+        # THE FIX: Divide by temperature before softmax to sharpen the distribution
         attn_logits = self.attention_weights(a_v * a_u) / self.attn_temperature
         weights = F.softmax(attn_logits, dim=0).view(-1, 1)
 
