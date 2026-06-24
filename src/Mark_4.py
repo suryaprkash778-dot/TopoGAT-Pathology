@@ -475,6 +475,12 @@ def process_slide(slide_path, label, extractor, gnn, criterion_bce, criterion_ms
             row_filtered = row[mask]
             col_filtered = col[mask]
             
+            # THE FIX: Diagnostic-only telemetry for the morpho_thresh filter stage
+            morpho_survival = {
+                'radius_pairs': len(pairs),
+                'morpho_kept': int(mask.sum().item()) if len(pairs) > 0 else 0
+            }
+            
             # 4. Make surviving edges bidirectional or fallback to k-NN
             if len(row_filtered) > 0:
                 edge_index = torch.stack([
