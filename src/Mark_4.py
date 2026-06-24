@@ -310,6 +310,9 @@ class TopoGAT(nn.Module):
         
         # THE FIX: Temperature to sharpen attention away from uniform collapse
         self.attn_temperature = 0.1
+        
+        # THE FIX: Temperature to sharpen attention away from uniform collapse
+        self.attn_temperature = 0.1
 
         # THE FIX: Doubling input size for Dual-Stream MIL (Attention + Max)
         self.classifier = nn.Linear(hidden_dim * 2, 1)
