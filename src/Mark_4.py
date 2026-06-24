@@ -519,7 +519,9 @@ def process_slide(slide_path, label, extractor, gnn, criterion_bce, criterion_ms
         raw_metrics = {
             'diag': loss_diag.item(), 'recon': loss_recon.item(), 'org': loss_org.item(),
             'edges_kept': telemetry['edges_kept'], 'edges_total': telemetry['edges_total'],
-            'attn_norm': telemetry['attn_norm'], 'max_norm': telemetry['max_norm']
+            'attn_norm': telemetry['attn_norm'], 'max_norm': telemetry['max_norm'],
+            'radius_pairs': morpho_survival['radius_pairs'],
+            'morpho_kept': morpho_survival['morpho_kept']
         }
 
         if not is_training:
