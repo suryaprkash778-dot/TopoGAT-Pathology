@@ -367,7 +367,17 @@ class TopoGAT(nn.Module):
         # Force the shape to (N, 1) to prevent broadcasting mismatch if edge cases arise
         weights = F.softmax(self.attention_weights(a_v * a_u), dim=0).view(-1, 1)
 
-        logits = self.classifier(torch.sum(x_res * weights, dim=0, keepdim=True))
+        # 1. The Spatial Graph Features (Attention-weighted MIL)
+        attn_pooled = torch.sum(x_res * weights, dim=0, keepdim=True)
+        
+        # 2. THE SKIP CONNECTION: Max Pooling (The Needle Finder)
+        # [0] unpacks the max values from the indices returned by torch.max
+        max_pooled = torch.max(x_res, dim=0, keepdim=True)[0] 
+        
+        # 3. Combine both streams and classify
+        combined_feat = torch.cat([attn_pooled, max_pooled], dim=1)
+        logits = self.classifier(combined_feat)
+
         # THE FIX: Package the edge statistics to monitor graph collapse
         edge_stats = (pruned_edge_index.shape[1], edge_index.shape[1])
         
