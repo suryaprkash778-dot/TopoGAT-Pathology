@@ -680,11 +680,11 @@ if start_epoch == 1 and start_chunk == 0 and not os.path.exists(CHECKPOINT_PATH)
     print("[SYSTEM] Warmup Complete. Wavelet eyes initialized.")
     manage_cloud_chunk(1, download=False)
     
-    # THE FIX: Freeze the extractor to stop Recon loss cannibalization
-    for param in extractor.parameters():
-        param.requires_grad = False
-    extractor.eval()
-    print("[SYSTEM] Extractor weights frozen. Classifier now controls the biological destiny.")
+# THE FIX: Universal Extractor Freeze (Applies on both fresh runs and checkpoint resumes)
+for param in extractor.parameters():
+    param.requires_grad = False
+extractor.eval()
+print("[SYSTEM] Extractor weights explicitly frozen for this session.")
 # ----------------- PHASE 1 & 2: TRAIN AND VALIDATE -----------------
 for epoch in range(start_epoch, EPOCHS + 1):
     print(f"\n=========================================\n         EPOCH {epoch}/{EPOCHS}         \n=========================================")
