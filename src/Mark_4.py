@@ -63,10 +63,9 @@ else:
     
 os.makedirs(CHECKPOINT_DIR, exist_ok=True)
 
-# THE FIX: Hard reset to prevent stale optimizer state and LR overrides
-CHECKPOINT_PATH = os.path.join(CHECKPOINT_DIR, "mid_flight_checkpoint_mk5.pth")
-BEST_MODEL_PATH = os.path.join(CHECKPOINT_DIR, "best_mark5.pth")
-
+# THE FIX: Hard reset to Mark 6 to avoid shape mismatch crashes
+CHECKPOINT_PATH = os.path.join(CHECKPOINT_DIR, "mid_flight_checkpoint_mk6.pth")
+BEST_MODEL_PATH = os.path.join(CHECKPOINT_DIR, "best_mark6.pth")
 # --- THE FIX: Dynamic VRAM Sniffer ---
 def get_optimal_batch_size():
     if not torch.cuda.is_available():
