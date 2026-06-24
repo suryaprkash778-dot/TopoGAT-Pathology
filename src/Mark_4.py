@@ -586,9 +586,8 @@ gnn = TopoGAT().to(device)
 meta_params = [gnn.learned_tau, gnn.learned_thresh, gnn.loss_log_vars]
 meta_ids = set(id(p) for p in meta_params)
 
-# 2. Group the standard "Brain" weights
-base_params = [p for p in extractor.parameters() if id(p) not in meta_ids] + \
-              [p for p in gnn.parameters() if id(p) not in meta_ids]
+# 2. Group the standard "Brain" weights (Extractor excluded, as it will be frozen)
+base_params = [p for p in gnn.parameters() if id(p) not in meta_ids]
 
 # --- THE FIX: Multi-Speed Meta-Optimizer ---
 optimizer = optim.AdamW([
