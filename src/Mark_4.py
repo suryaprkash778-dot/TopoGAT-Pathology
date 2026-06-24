@@ -741,7 +741,7 @@ for epoch in range(start_epoch, EPOCHS + 1):
             slide_count += 1
             
             # Print to terminal
-            print(f"  Train -> {slide} | Pred: {pred:.4f} | Diag: {raw_metrics['diag']:.4f} | Thresh: {gnn.learned_thresh.item():.4f} | Edges: {raw_metrics['edges_kept']} / {raw_metrics['edges_total']}")
+            print(f"  Train -> {slide} | Pred: {pred:.4f} | Diag: {raw_metrics['diag']:.4f} | Thresh: {gnn.learned_thresh.item():.4f} | Edges: {raw_metrics['edges_kept']} / {raw_metrics['edges_total']} | MorphoSurvival: {raw_metrics['morpho_kept']} / {raw_metrics['radius_pairs']}")
             # THE FIX: MIL Attention & Stream Magnitude Diagnostics
             print(f"    ↳ MIL Attn | Max: {weights.max().item():.4f} | Min: {weights.min().item():.4f} | Std: {weights.std().item():.6f}")
             print(f"    ↳ Stream Norms | Attn: {raw_metrics['attn_norm']:.2f} | Max: {raw_metrics['max_norm']:.2f}")
