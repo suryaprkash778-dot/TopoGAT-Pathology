@@ -307,6 +307,9 @@ class TopoGAT(nn.Module):
         self.attention_V = nn.Sequential(nn.Linear(hidden_dim, 64), nn.Tanh())
         self.attention_U = nn.Sequential(nn.Linear(hidden_dim, 64), nn.Sigmoid())
         self.attention_weights = nn.Linear(64, 1)
+        
+        # THE FIX: Temperature to sharpen attention away from uniform collapse
+        self.attn_temperature = 0.1
 
         # THE FIX: Doubling input size for Dual-Stream MIL (Attention + Max)
         self.classifier = nn.Linear(hidden_dim * 2, 1)
@@ -362,9 +365,10 @@ class TopoGAT(nn.Module):
         a_v = self.attention_V(x_res)
         a_u = self.attention_U(x_res)
         
-        # --- THE FIX: Explicit Dimensionality ---
-        # Force the shape to (N, 1) to prevent broadcasting mismatch if edge cases arise
-        weights = F.softmax(self.attention_weights(a_v * a_u), dim=0).view(-1, 1)
+        # --- THE FIX: Explicit Dimensionality & Temperature Scaling ---
+        # Divide by temperature before softmax to sharpen the distribution
+        attn_logits = self.attention_weights(a_v * a_u) / self.attn_temperature
+        weights = F.softmax(attn_logits, dim=0).view(-1, 1)
 
         # 1. The Spatial Graph Features (Attention-weighted MIL)
         attn_pooled = torch.sum(x_res * weights, dim=0, keepdim=True)
