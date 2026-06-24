@@ -97,7 +97,7 @@ CONFIG = {
     "batch_size": get_optimal_batch_size(),  # --- THE FIX: Auto-Scaling Allocation ---
     
     "gnn_heads": 4,            # Number of multi-core attention heads
-    "connect_radius": 600.0,   # Physical distance (pixels) to draw initial edges
+    "connect_radius": 1500.0,  # THE FIX: Widened to prevent sparse graph starvation
     
 
     # --- NOVELTY MATH DIALS ---
