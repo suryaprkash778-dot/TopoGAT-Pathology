@@ -49,8 +49,16 @@ import concurrent.futures
 # =====================================================================
 # 1. PERSISTENT STORAGE & CONFIGURATION
 # =====================================================================
+# THE FIX: Fixed seed for reproducible comparisons across architecture changes
+SEED = 42
+torch.manual_seed(SEED)
+torch.cuda.manual_seed_all(SEED)
+np.random.seed(SEED)
+random.seed(SEED)
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print(f"--- INITIATING MARK 4 (TopoGAT) ON {device.type.upper()} ---")
+# Also fixing the print statement to reflect the correct Mark!
+print(f"--- INITIATING MARK 12 (TopoGAT) ON {device.type.upper()} ---")
 
 # --- THE FIX: Dynamic Checkpoint Routing ---
 # Automatically route saves to Google Drive if available, otherwise use local disk
