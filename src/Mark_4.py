@@ -344,16 +344,12 @@ class TopoGAT(nn.Module):
         steepness = 15.0  
         edge_weights = torch.sigmoid((decayed_scores - self.learned_thresh.to(current_dtype)) * steepness)
         
-        mask = edge_weights > 0.05  
-        pruned_edge_index = edge_index[:, mask]
-        
-        # 3. Force shape to (N, 1) AND strictly enforce dtype for PyG
-        pruned_edge_weights = edge_weights[mask].view(-1, 1).to(current_dtype) 
-
-        if pruned_edge_index.shape[1] == 0:
-            pruned_edge_index = edge_index
-            # 4. Enforce the same dtype on the fallback tensor
-            pruned_edge_weights = torch.ones((edge_index.shape[1], 1), dtype=current_dtype, device=device)
+        # THE FIX: Disable hard pruning entirely. Every edge in the radius graph passes through
+        # to the GAT layers, weighted by its continuous soft score instead of being masked out.
+        # This removes DARTS as a source of edge starvation while keeping the soft weighting
+        # mechanism (and its gradient path to learned_tau/learned_thresh) fully intact.
+        pruned_edge_index = edge_index
+        pruned_edge_weights = edge_weights.view(-1, 1).to(current_dtype)
 
         # Inject the structural weights into the GAT to preserve the gradient graph!
         x1 = F.leaky_relu(self.conv1(pos_nodes, pruned_edge_index, edge_attr=pruned_edge_weights), 0.01)
