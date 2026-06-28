@@ -316,8 +316,8 @@ class TopoGAT(nn.Module):
         self.attention_U = nn.Sequential(nn.Linear(hidden_dim, 64), nn.Sigmoid())
         self.attention_weights = nn.Linear(64, 1)
         
-        # THE FIX: Pushing temperature lower to test forced softmax separation
-        self.attn_temperature = 0.05
+        # RESTORED: Keeping temperature locked at 0.1 to isolate the MLP ablation
+        self.attn_temperature = 0.1
         
         
 
