@@ -321,9 +321,12 @@ class TopoGAT(nn.Module):
         
         
 
-        # THE FIX: Doubling input size for Dual-Stream MIL (Attention + Max)
-        self.classifier = nn.Linear(hidden_dim * 2, 1)
-
+        # THE FIX: Upgrade to a small MLP for non-linear boundary mapping
+        self.classifier = nn.Sequential(
+            nn.Linear(hidden_dim * 2, 64),
+            nn.ReLU(),
+            nn.Linear(64, 1)
+        )
         # --- NEW: Self-Regulating Hydra Loss Controllers ---
         # The AI learns these 3 values to dynamically balance its own loss functions
         self.loss_log_vars = nn.Parameter(torch.zeros(3))
