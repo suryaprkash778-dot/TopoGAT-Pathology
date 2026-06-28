@@ -13,7 +13,7 @@ except ModuleNotFoundError:
     print("[SYSTEM] Installing OpenSlide C-Libraries (this takes ~15 seconds)...")
     os.system("apt-get update -qq && apt-get install -y openslide-tools > /dev/null 2>&1")
     print("[SYSTEM] Installing Python wrappers and Graph components...")
-    os.system("pip install openslide-python torch-geometric torchvision boto3 -q")
+    os.system("pip install openslide-python torch-geometric boto3 -q")
     print("[SYSTEM] Environment built successfully! Proceeding to TopoGAT Execution...\n")
     import site
     from importlib import reload
