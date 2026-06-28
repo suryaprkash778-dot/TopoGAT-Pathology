@@ -702,11 +702,11 @@ if start_epoch == 1 and start_chunk == 0 and not os.path.exists(CHECKPOINT_PATH)
     print("[SYSTEM] Warmup Complete. Wavelet eyes initialized.")
     manage_cloud_chunk(1, download=False)
     
-# THE FIX: Universal Extractor Freeze (Applies on both fresh runs and checkpoint resumes)
+# THE FIX: Unfreeze the Extractor for End-to-End Learning
 for param in extractor.parameters():
-    param.requires_grad = False
-extractor.eval()
-print("[SYSTEM] Extractor weights explicitly frozen for this session.")
+    param.requires_grad = True
+extractor.train() 
+print("[SYSTEM] Extractor weights UNFROZEN. Initiating end-to-end learning.")
 # ----------------- PHASE 1 & 2: TRAIN AND VALIDATE -----------------
 for epoch in range(start_epoch, EPOCHS + 1):
     print(f"\n=========================================\n         EPOCH {epoch}/{EPOCHS}         \n=========================================")
