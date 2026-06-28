@@ -356,15 +356,12 @@ class TopoGAT(nn.Module):
         edge_weights = torch.sigmoid((decayed_scores - self.learned_thresh.to(current_dtype)) * steepness)
         
         # RESTORED: Hard pruning to prevent graph oversmoothing
-        mask = edge_weights > 0.05  
+        mask = edge_weights > 0.05
         pruned_edge_index = edge_index[:, mask]
-        
-        # Force shape to (N, 1) AND strictly enforce dtype for PyG
-        pruned_edge_weights = edge_weights[mask].view(-1, 1).to(current_dtype) 
+        pruned_edge_weights = edge_weights[mask].view(-1, 1).to(current_dtype)
 
         if pruned_edge_index.shape[1] == 0:
             pruned_edge_index = edge_index
-            # Enforce the same dtype on the fallback tensor
             pruned_edge_weights = torch.ones((edge_index.shape[1], 1), dtype=current_dtype, device=device)
 
         # Inject the structural weights into the GAT to preserve the gradient graph!
