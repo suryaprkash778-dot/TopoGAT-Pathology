@@ -71,9 +71,9 @@ else:
     
 os.makedirs(CHECKPOINT_DIR, exist_ok=True)
 
-# THE FIX: Hard reset to Mark 13 for isolated MLP classifier test
-CHECKPOINT_PATH = os.path.join(CHECKPOINT_DIR, "mid_flight_checkpoint_mk13.pth")
-BEST_MODEL_PATH = os.path.join(CHECKPOINT_DIR, "best_mark13.pth")
+# THE FIX: Hard reset to Mark 14 for End-to-End Learning
+CHECKPOINT_PATH = os.path.join(CHECKPOINT_DIR, "mid_flight_checkpoint_mk14.pth")
+BEST_MODEL_PATH = os.path.join(CHECKPOINT_DIR, "best_mark14.pth")
 # --- THE FIX: Dynamic VRAM Sniffer ---
 def get_optimal_batch_size():
     if not torch.cuda.is_available():
